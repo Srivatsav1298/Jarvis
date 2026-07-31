@@ -1,0 +1,67 @@
+/*
+ * highlight.js theme — STARC (dark, monochrome, soft cyan accents)
+ */
+.hljs {
+  color: #c9d1d9;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #5b6470;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-name {
+  color: #a7e3ff;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: #f4f6fa;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-template-variable,
+.hljs-variable,
+.hljs-addition {
+  color: #b9d9b5;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta,
+.hljs-regexp {
+  color: #d8c48a;
+}
+
+.hljs-built_in,
+.hljs-type,
+.hljs-section {
+  color: #9aa3ad;
+}
+
+.hljs-params,
+.hljs-attribute {
+  color: #cdd3da;
+}
+
+.hljs-deletion {
+  color: #d98d8d;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
+}

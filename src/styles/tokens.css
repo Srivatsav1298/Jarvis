@@ -1,0 +1,53 @@
+@theme {
+  /* ---- Base palette ---- */
+  --color-bg: #05060a;
+  --color-graphite: #0b0d13;
+  --color-charcoal: #14161c;
+  --color-gunmetal: #1e2128;
+  --color-steel: #2a2e36;
+  --color-steel-light: #3a3f47;
+  --color-faint: #464b55;
+
+  /* ---- Text ---- */
+  --color-soft-white: #f4f6fa;
+  --color-silver: #9aa3ad;
+  --color-muted: #6b7280;
+
+  /* ---- Accent (very soft cyan, used sparingly) ---- */
+  --color-accent: #a7e3ff;
+  --color-accent-dim: #6ea8c9;
+  --color-accent-glow: rgba(167, 227, 255, 0.16);
+
+  /* ---- Status ---- */
+  --color-ok: #8fca9a;
+  --color-warn: #d8c48a;
+  --color-danger: #d98d8d;
+
+  /* ---- Typography ---- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* ---- Radii ---- */
+  --radius-card: 16px;
+  --radius-panel: 14px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows ---- */
+  --shadow-panel: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -24px rgba(0, 0, 0, 0.65);
+  --shadow-raise: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 32px 80px -28px rgba(0, 0, 0, 0.8);
+  --shadow-glow-white: 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 40px 0 rgba(255, 255, 255, 0.06);
+  --shadow-glow-cyan: 0 0 0 1px rgba(167, 227, 255, 0.12),
+    0 0 48px 0 rgba(167, 227, 255, 0.12);
+  --shadow-pop: 0 24px 80px -20px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+
+  /* ---- Blur ---- */
+  --blur-glass: 20px;
+
+  /* ---- Easing ---- */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
