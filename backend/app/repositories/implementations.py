@@ -1,5 +1,5 @@
 """Concrete repositories — one small class per aggregate."""
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import (
     Conversation,
@@ -12,6 +12,7 @@ from app.models import (
     SettingsRecord,
 )
 from app.repositories.base import SQLAlchemyRepository
+from app.utils.time import utcnow
 
 
 class ConversationRepository(SQLAlchemyRepository[Conversation]):
@@ -48,6 +49,19 @@ class ReminderRepository(SQLAlchemyRepository[Reminder]):
     """Data access for reminders."""
 
     model = Reminder
+
+    async def count_due(self) -> int:
+        """Count reminders that are due and not yet completed."""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(Reminder)
+            .where(
+                Reminder.completed.is_(False),
+                Reminder.due_at.is_not(None),
+                Reminder.due_at <= utcnow(),
+            )
+        )
+        return int(result.scalar_one())
 
 
 class MemoryRepository(SQLAlchemyRepository[MemoryEntry]):

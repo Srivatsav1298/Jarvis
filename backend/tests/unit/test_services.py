@@ -67,5 +67,5 @@ async def test_reminder_service_counts_due(session) -> None:
         )
     )
     await session.commit()
-    service = ReminderService(ReminderRepository(session), session)
+    service = ReminderService(ReminderRepository(session))
     assert await service.count_due() == 1
