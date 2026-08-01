@@ -8,3 +8,6 @@ coverage
 .DS_Store
 npm-debug.log*
 *.tsbuildinfo
+
+# git worktrees
+.worktrees/
