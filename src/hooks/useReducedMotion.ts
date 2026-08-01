@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { usePrefersReducedMotion as useFmPrefersReducedMotion } from 'framer-motion'
+import { useReducedMotion as useFmPrefersReducedMotion } from 'framer-motion'
 import { useUIStore } from '@/stores/uiStore'
 
 export function useReducedMotion(): boolean {

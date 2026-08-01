@@ -3,6 +3,7 @@ import type { MetricKey, Metrics } from '@/types'
 import { noiseWalk, random } from '@/utils/random'
 
 export const HISTORY_LEN = 60
+export const STORAGE_TOTAL_GB = 1024
 
 function seedHistory(value: number): number[] {
   return Array.from({ length: HISTORY_LEN }, () => value)
@@ -15,7 +16,7 @@ const initialState: Metrics = {
   battery: 82,
   batteryCharging: true,
   storageUsed: 312,
-  storageTotal: 1024,
+  storageTotal: STORAGE_TOTAL_GB,
   temperature: 47,
   network: {
     connected: true,
@@ -155,6 +156,6 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
     set({ running: false })
   },
 
-  setMic: (active, level = 0) => set((s) => ({ mic: { active, level } })),
-  setCamera: (active, level = 0) => set((s) => ({ camera: { active, level } })),
+  setMic: (active, level = 0) => set({ mic: { active, level } }),
+  setCamera: (active, level = 0) => set({ camera: { active, level } }),
 }))
