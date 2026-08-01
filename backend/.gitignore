@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Env & secrets
+.env
+
+# Data
+data/
+*.db
+*.sqlite3
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
