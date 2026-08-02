@@ -121,7 +121,6 @@ Every error response uses the same JSON shape:
 
 | HTTP | `code` | Raised by |
 |------|--------|-----------|
-| 400 | *(framework)* | request validation (FastAPI `RequestValidationError`) |
 | 401 | `unauthorized` | `UnauthorizedError` |
 | 403 | `forbidden` | `ForbiddenError` |
 | 404 | `not_found` | `NotFoundError` |
