@@ -9,7 +9,7 @@
 ## 1. Goal & Constraints
 
 - Connect every widget of the four target panels to backend APIs; backend is the single source of truth.
-- Replace mock values in `src/services/` (embedding, metrics, chat, notifications, memory) with backend-backed data.
+- Replace mock values in `src/services/` (chat, notifications, memory) and the ripple simulation in `src/stores/metricsStore.ts` with backend-backed data.
 - Keep frontend changes **minimal** — swap data sources inside existing Zustand stores/services; UI components effectively unchanged.
 - Standardized REST envelope, standardized errors, WebSocket-first streaming, Pydantic validation, centralized exception handling, documentation.
 - Choose infrastructure that also serves future voice, memory-retrieval, and tool-calling without re-architecture.
@@ -65,7 +65,7 @@ Server → client (all `{version:1, type, payload}`):
 | `pong` | `{ts}` |
 | `system.metrics` | full metric snapshot (delta-gated) |
 | `notification.created` | `NotificationRead` |
-| `chat.routed` / `chat.started` | `{request_id, conversation_id, model}` |
+| `chat.started` | `{request_id, conversation_id, model}` |
 | `ai.thinking` | `{request_id}` |
 | `chat.chunk` | `{request_id, text}` |
 | `chat.end` | `{request_id, conversation_id, message_id, model, latency_ms, token_count}` |
@@ -108,7 +108,7 @@ Add migration cols: `pinned` (Bool), `last_model` (str, null), `last_activity` (
 
 ---
 
-## 5. Frontend — New Infrastructure
+## 4. Frontend — New Infrastructure
 
 - `vite.config.ts`: `server.proxy` → `/api → http://127.0.0.1:8000`, `/ws → ws://127.0.0.1:8000` (ws:true). CORS already tolerates 5173.
 - `src/services/api.ts`: `API_BASE = import.meta.env.VITE_API_URL ?? ''`; `request<T>` with JSON `/api/v1`, **unwraps envelope** `{success,data}` vs `{success:false,error}` → `ApiError`; timeout; exponential-backoff retry (network/5xx, 3x; idempotent GET/DELETE via `request_id` safe); `get/post/patch/put/del`.
@@ -131,12 +131,12 @@ Add migration cols: `pinned` (Bool), `last_model` (str, null), `last_activity` (
 
 ---
 
-## 6. Error Handling, Loading, Retry, Recovery
+## 5. Error Handling, Loading, Retry, Recovery
 
 - Backend: keep existing Pydantic validation + centralized handlers; change response contract to the envelope; ensure 4xx must not be retried, 5xx idempotent ones are.
 - Frontend: `ApiError` → toast + inline `ErrorState`; `retry` on 5xx/network; WS: silent autoreconnect with `connectionStore`; active chat streams auto-cancel+retransmit on reconnect (idempotent via `request_id`).
 
-## 7. Testing
+## 6. Testing
 
 - Backend (pytest, `uv run pytest -q`):
   - `/system/metrics` returns expected shape (psutil mocked);
@@ -151,13 +151,13 @@ Add migration cols: `pinned` (Bool), `last_model` (str, null), `last_activity` (
   - `ws.test.ts` (mock WebSocket: heartbeat, reconnect, latency);
   - update `chat.test`, `metrics.test`, `memoryStore.test` to mock `api.ts`/`ws.ts`.
 
-## 8. Documentation
+## 7. Documentation
 
 Update `backend/README.md`: full endpoint reference, WS message contract & heartbeat, streaming example, integration guide (run both servers, proxy), curl/sample usage, test instructions.
 
 ---
 
-## 9. Assumptions & Non-Goals
+## 8. Assumptions & Non-Goals
 
 - Single-user; no auth (existing `created_by` col is informational).
 - GPU & temperature report `null` (unavailable) — never faked.
