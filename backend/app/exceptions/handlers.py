@@ -9,13 +9,16 @@ from app.exceptions.base import JARVISError
 
 
 def _error_body(status: int, code: str, message: str, detail: Any = None) -> dict[str, Any]:
-    """Build the standardized error response body."""
+    """Build the standardized error envelope body."""
     return {
-        "type": "about:blank",
-        "title": message,
-        "status": status,
-        "code": code,
-        "detail": detail,
+        "success": False,
+        "error": {
+            "type": "about:blank",
+            "title": message,
+            "status": status,
+            "code": code,
+            "detail": detail,
+        },
     }
 
 

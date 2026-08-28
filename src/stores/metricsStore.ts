@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { MetricKey, Metrics } from '@/types'
+import type { SystemMetrics } from '@/types/api'
 import { noiseWalk, random } from '@/utils/random'
+import { api } from '@/services/api'
+import { socket } from '@/services/ws'
+import { SYSTEM_METRICS } from '@/services/events'
 
 export const HISTORY_LEN = 60
 export const STORAGE_TOTAL_GB = 1024
@@ -48,28 +52,55 @@ const initialState: Metrics = {
 
 const KEYS: MetricKey[] = ['cpu', 'ram', 'gpu', 'temp', 'latency', 'netDown']
 
-function currentValue(
-  key: MetricKey,
-  cpu: number,
-  ram: number,
-  gpu: number,
-  temp: number,
-  latency: number,
-  netDown: number,
-): number {
-  switch (key) {
-    case 'cpu':
-      return cpu
-    case 'ram':
-      return ram
-    case 'gpu':
-      return gpu
-    case 'temp':
-      return temp
-    case 'latency':
-      return latency
-    case 'netDown':
-      return netDown
+/** Append a value into a history ring, trimming to HISTORY_LEN. */
+function pushHistory(history: Metrics['history'], key: MetricKey, value: number): void {
+  history[key] = [...history[key].slice(-(HISTORY_LEN - 1)), value]
+}
+
+/** Map a live backend SystemMetrics into a Metrics diff + updated history. */
+function applySystemMetrics(
+  prev: Metrics,
+  live: SystemMetrics,
+  apiLatencyMs: number | null,
+): Metrics {
+  const gpu = live.gpu?.percent ?? prev.gpu
+  const temperature = live.temp?.c ?? prev.temperature
+  const latency = live.network.latency_ms ?? (apiLatencyMs ?? prev.network.latencyMs)
+
+  const history: Metrics['history'] = {
+    cpu: [...prev.history.cpu],
+    ram: [...prev.history.ram],
+    gpu: [...prev.history.gpu],
+    temp: [...prev.history.temp],
+    latency: [...prev.history.latency],
+    netDown: [...prev.history.netDown],
+  }
+  pushHistory(history, 'cpu', live.cpu_percent)
+  pushHistory(history, 'ram', live.ram_percent)
+  pushHistory(history, 'gpu', gpu)
+  pushHistory(history, 'temp', temperature)
+  pushHistory(history, 'latency', latency)
+  pushHistory(history, 'netDown', live.network.down_mbps)
+
+  return {
+    ...prev,
+    cpu: live.cpu_percent,
+    ram: live.ram_percent,
+    gpu,
+    temperature,
+    battery: live.battery?.percent ?? prev.battery,
+    batteryCharging: live.battery?.charging ?? prev.batteryCharging,
+    storageUsed: live.storage_used_gb,
+    storageTotal: live.storage_total_gb,
+    network: {
+      connected: live.network.connected,
+      type: live.network.type === 'wifi' ? 'wifi' : 'ethernet',
+      downMbps: live.network.down_mbps,
+      upMbps: live.network.up_mbps,
+      latencyMs: latency,
+      ssid: live.network.ssid ?? prev.network.ssid,
+    },
+    history,
   }
 }
 
@@ -99,12 +130,11 @@ function evolve(prev: Metrics): Metrics {
     Math.min(100, prev.battery + (prev.batteryCharging ? 0.02 : -0.01)),
   )
 
-  const history = Object.fromEntries(
-    KEYS.map((k) => {
-      const val = currentValue(k, cpu, ram, gpu, temp, latency, netDown)
-      return [k, [...prev.history[k].slice(-(HISTORY_LEN - 1)), val]]
-    }),
-  ) as Record<MetricKey, number[]>
+  const history: Metrics['history'] = { ...prev.history }
+  KEYS.forEach((k) => {
+    const val = currentValue(k, cpu, ram, gpu, temp, latency, netDown)
+    pushHistory(history, k, val)
+  })
 
   return {
     ...prev,
@@ -125,35 +155,105 @@ function evolve(prev: Metrics): Metrics {
   }
 }
 
+function currentValue(
+  key: MetricKey,
+  cpu: number,
+  ram: number,
+  gpu: number,
+  temp: number,
+  latency: number,
+  netDown: number,
+): number {
+  switch (key) {
+    case 'cpu':
+      return cpu
+    case 'ram':
+      return ram
+    case 'gpu':
+      return gpu
+    case 'temp':
+      return temp
+    case 'latency':
+      return latency
+    case 'netDown':
+      return netDown
+  }
+}
+
 interface MetricsState extends Metrics {
   running: boolean
+  live: boolean
   tick: () => void
   start: () => void
   stop: () => void
+  refresh: () => Promise<void>
   setMic: (active: boolean, level?: number) => void
   setCamera: (active: boolean, level?: number) => void
 }
 
-let intervalId: number | null = null
+let simId: number | null = null
+let pollId: number | null = null
+let cleanupLive: (() => void) | null = null
 
 export const useMetricsStore = create<MetricsState>()((set, get) => ({
   ...initialState,
   running: false,
+  live: false,
 
   tick: () => set(evolve(get())),
+
+  refresh: async () => {
+    try {
+      const live = await api.get<SystemMetrics>('/system/metrics')
+      set((s) => applySystemMetrics(s, live, live.api_latency_ms))
+    } catch {
+      // fall back to simulation if the API is unreachable
+    }
+  },
 
   start: () => {
     if (get().running) return
     set({ running: true })
-    intervalId = window.setInterval(() => get().tick(), 1000)
+
+    cleanupLive = socket.subscribe(SYSTEM_METRICS, (payload) => {
+      const p = payload as unknown as { metrics?: SystemMetrics }
+      const live = p.metrics ?? (payload as unknown as SystemMetrics)
+      if (live && typeof live.cpu_percent === 'number') {
+        set((s) => applySystemMetrics(s, live, live.api_latency_ms))
+        set({ live: true })
+      }
+    })
+
+    void get().refresh()
+    simId = window.setInterval(() => get().tick(), 1000)
+
+    // Fall back to polling the API every second when the WS is closed.
+    const checkWss = () => {
+      if (socket.status === 'open') {
+        if (pollId !== null) {
+          window.clearInterval(pollId)
+          pollId = null
+        }
+      } else if (pollId === null) {
+        pollId = window.setInterval(() => void get().refresh(), 1000)
+      }
+    }
+    checkWss()
+    pollId ??= window.setInterval(checkWss, 1000)
   },
 
   stop: () => {
-    if (intervalId !== null) {
-      window.clearInterval(intervalId)
-      intervalId = null
+    if (simId !== null) {
+      window.clearInterval(simId)
+      simId = null
     }
-    set({ running: false })
+    if (pollId !== null) {
+      window.clearInterval(pollId)
+      pollId = null
+    }
+    cleanupLive?.()
+    cleanupLive = null
+    set({ running: false, live: false })
   },
 
   setMic: (active, level = 0) => set({ mic: { active, level } }),

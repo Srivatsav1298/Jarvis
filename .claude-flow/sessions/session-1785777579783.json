@@ -1,0 +1,14 @@
+{
+  "id": "session-1785777579783",
+  "startedAt": "2026-08-03T17:19:39.783Z",
+  "cwd": "/Users/vatsavabbu/Projects/Jarvis",
+  "context": {},
+  "metrics": {
+    "edits": 1,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-08-03T17:42:22.665Z",
+  "duration": 1362887
+}

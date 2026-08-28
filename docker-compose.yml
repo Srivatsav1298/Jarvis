@@ -1,0 +1,19 @@
+services:
+  kokoro:
+    build:
+      context: .
+      dockerfile: docker/kokoro/Dockerfile
+    image: kokoro-jarvis:local
+    container_name: kokoro
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8880:8880/tcp"
+    volumes:
+      - kokoro-data:/var/lib/kokoro
+    environment:
+      KOKORO_VOICE: af_heart
+      KOKORO_PORT: "8880"
+
+volumes:
+  kokoro-data:
+    name: kokoro-data

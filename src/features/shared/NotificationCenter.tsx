@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useUIStore } from '@/stores/uiStore'
-import { NOTIFICATIONS } from '@/services/notifications'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { relativeTime } from '@/utils/format'
 import { Icon } from '@/components/ui'
 import { cn } from '@/utils/cn'
@@ -17,9 +17,20 @@ const KIND_ICON: Record<string, string> = {
 export function NotificationCenter() {
   const open = useUIStore((s) => s.notificationsOpen)
   const setOpen = useUIStore((s) => s.setNotificationsOpen)
-  const [read, setRead] = useState<Set<string>>(new Set())
+  const pushToast = useUIStore((s) => s.pushToast)
 
-  const unread = NOTIFICATIONS.filter((n) => !read.has(n.id)).length
+  const notifications = useNotificationStore((s) => s.notifications)
+  const unread = useNotificationStore((s) => s.unread)
+  const load = useNotificationStore((s) => s.load)
+  const markRead = useNotificationStore((s) => s.markRead)
+  const markAllRead = useNotificationStore((s) => s.markAllRead)
+  const start = useNotificationStore((s) => s.start)
+
+  useEffect(() => {
+    void load()
+    start(pushToast)
+    return () => useNotificationStore.getState().stop()
+  }, [load, start, pushToast])
 
   return (
     <div className="relative">
@@ -55,26 +66,24 @@ export function NotificationCenter() {
                 </p>
               </div>
               <button
-                onClick={() => setRead(new Set(NOTIFICATIONS.map((n) => n.id)))}
+                onClick={() => void markAllRead()}
                 className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10"
               >
                 Mark all read
               </button>
             </div>
             <div className="max-h-[360px] overflow-y-auto">
-              {NOTIFICATIONS.map((n) => {
-                const isRead = read.has(n.id)
+              {notifications.length === 0 && (
+                <p className="px-4 py-6 text-center text-xs text-muted">
+                  No notifications yet.
+                </p>
+              )}
+              {notifications.map((n) => {
+                const isRead = n.read
                 return (
                   <button
                     key={n.id}
-                    onClick={() =>
-                      setRead((r) => {
-                        const next = new Set(r)
-                        if (isRead) next.delete(n.id)
-                        else next.add(n.id)
-                        return next
-                      })
-                    }
+                    onClick={() => void markRead(n.id, !isRead)}
                     className={cn(
                       'flex w-full items-start gap-3 border-b border-white/[0.04] px-4 py-3 text-left transition-colors hover:bg-white/[0.03]',
                       !isRead && 'bg-accent/[0.04]',

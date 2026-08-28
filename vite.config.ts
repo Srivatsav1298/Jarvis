@@ -10,6 +10,24 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  optimizeDeps: {
+    include: ['react-icons/hi2'],
+  },
+  server: {
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://127.0.0.1:8000',
+        ws: true,
+      },
+    },
+  },
   build: {
     target: 'es2022',
     cssCodeSplit: true,
@@ -19,5 +37,6 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.ts',
     css: false,
+    exclude: ['**/node_modules/**', '**/.worktrees/**', '**/dist/**'],
   },
 })

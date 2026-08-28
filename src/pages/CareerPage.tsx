@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageContainer, PageHeader } from '@/features/shared/PageContainer'
 import { JobCard } from '@/features/career/JobCard'
-import { JOBS, jobLogoHue } from '@/services/jobs'
+import { fetchJobs, jobLogoHue } from '@/services/jobs'
 import type { Job, JobStatus } from '@/types'
 import { Badge, Button, ProgressBar, SearchInput, Tabs } from '@/components/ui'
 import { useOrbStore } from '@/stores/orbStore'
@@ -24,24 +24,47 @@ export default function CareerPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Job | null>(null)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [loading, setLoading] = useState(true)
   const setOrbMode = useOrbStore((s) => s.setMode)
   const pushToast = useUIStore((s) => s.pushToast)
 
-  const jobs = JOBS.filter((j) => {
-    if (filter === 'all') return true
-    if (filter === 'top') return j.aiRecommendation === 'top'
-    return j.status === filter
-  }).filter((j) =>
-    `${j.company} ${j.role} ${j.location} ${j.skills.join(' ')}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  )
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    fetchJobs(undefined, controller.signal)
+      .then(setJobs)
+      .finally(() => setLoading(false))
+    return () => controller.abort()
+  }, [])
 
-  const scanNow = () => {
+  const scanNow = async () => {
     setOrbMode('processing')
     pushToast({ title: 'Scanning job market', message: 'Checking 4 boards for new matches…', tone: 'info' })
-    window.setTimeout(() => useOrbStore.getState().setMode('completed'), 2000)
+    try {
+      const fresh = await fetchJobs(undefined, undefined, true)
+      setJobs(fresh)
+      pushToast({ title: 'Scan complete', message: `${fresh.length} live roles refreshed.`, tone: 'success' })
+      useOrbStore.getState().setMode('completed')
+    } catch {
+      pushToast({ title: 'Scan failed', message: 'Boards unreachable — showing last refresh.', tone: 'error' })
+      useOrbStore.getState().setMode('monitoring')
+    }
   }
+
+  const visible = useMemo(() => {
+    return jobs
+      .filter((j) => {
+        if (filter === 'all') return true
+        if (filter === 'top') return j.aiRecommendation === 'top'
+        return j.status === filter
+      })
+      .filter((j) =>
+        `${j.company} ${j.role} ${j.location} ${j.skills.join(' ')}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      )
+  }, [jobs, filter, query])
 
   return (
     <PageContainer className="p-5 sm:p-6 lg:p-8">
@@ -49,7 +72,7 @@ export default function CareerPage() {
         <PageHeader
           eyebrow="Career Intelligence"
           title="Opportunities"
-          subtitle="18 roles matched to your profile · 2 interviews in flight"
+          subtitle={`${jobs.length} live roles · refreshed daily at 07:00`}
           actions={
             <Button variant="secondary" onClick={scanNow}>
               <motion.span animate={{ rotate: 360 }} transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}>
@@ -70,12 +93,16 @@ export default function CareerPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {jobs.map((job) => (
+          {visible.map((job) => (
             <JobCard key={job.id} job={job} onSelect={(j) => setSelected(j)} />
           ))}
         </div>
 
-        {jobs.length === 0 && (
+        {loading && (
+          <div className="mt-8 text-center text-sm text-muted">Scanning the boards, Sir…</div>
+        )}
+
+        {!loading && visible.length === 0 && (
           <div className="mt-8 text-center text-sm text-muted">No roles match your filter, Sir.</div>
         )}
 
@@ -124,7 +151,7 @@ function JobDetailModal({ job, onClose }: { job: Job; onClose: () => void }) {
             <h2 className="text-lg font-bold text-soft-white">{job.role}</h2>
             <p className="text-[13px] text-muted">{job.company} · {job.location}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Badge tone="ok">{formatSalary(job.salary.min, job.salary.max)}</Badge>
+              <Badge tone="ok">{formatSalary(job.salary.min, job.salary.max, job.salary.currency)}</Badge>
               <Badge>{job.remote}</Badge>
               {job.visaSponsor && <Badge tone="accent">Visa sponsorship</Badge>}
             </div>

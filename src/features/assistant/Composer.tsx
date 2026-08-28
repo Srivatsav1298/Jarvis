@@ -3,8 +3,12 @@ import { motion } from 'framer-motion'
 import { useChatStore } from '@/stores/chatStore'
 import { QUICK_PROMPTS } from '@/stores/chatStore'
 import { audioService } from '@/services/audio'
+import { isSpeechSupported, speak, stopSpeaking } from '@/services/voice'
+import { startVoiceTurn, type VoiceTurnHandle } from '@/services/voiceTurn'
+import { stopHandsFree } from '@/services/voiceController'
 import { useOrbStore } from '@/stores/orbStore'
 import { useUIStore } from '@/stores/uiStore'
+import { useVoiceStore } from '@/stores/voiceStore'
 import {
   HiOutlineMicrophone,
   HiOutlinePaperClip,
@@ -12,17 +16,22 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi2'
 import { Button } from '@/components/ui'
+import { cn } from '@/utils/cn'
 
 export function Composer({ onCompose }: { onCompose?: () => void }) {
   const [text, setText] = useState('')
+  const [listening, setListening] = useState(false)
   const streaming = useChatStore((s) => s.streaming)
   const sendMessage = useChatStore((s) => s.sendMessage)
   const stopStreaming = useChatStore((s) => s.stopStreaming)
   const setOrbMode = useOrbStore((s) => s.setMode)
   const pushToast = useUIStore((s) => s.pushToast)
+  const voiceEnabled = useVoiceStore((s) => s.enabled)
   const taRef = useRef<HTMLTextAreaElement | null>(null)
+  const voiceRef = useRef<VoiceTurnHandle | null>(null)
+  const partialRef = useRef('')
 
-  const submit = () => {
+  const submit = async () => {
     if (!text.trim() || streaming) return
     audioService.play('activate')
     useOrbStore.getState().setPresence('thinking')
@@ -30,7 +39,21 @@ export function Composer({ onCompose }: { onCompose?: () => void }) {
     const value = text
     setText('')
     if (taRef.current) taRef.current.style.height = 'auto'
-    void sendMessage(value)
+    const reply = await sendMessage(value)
+    const settings = useVoiceStore.getState()
+    if (reply && settings.enabled && settings.autoSpeak) {
+      const spoke = speak(reply, {
+        rate: settings.rate,
+        pitch: settings.pitch,
+        volume: settings.volume,
+        voiceName: settings.voiceName,
+        onend: () => useOrbStore.getState().setMode('monitoring'),
+      })
+      if (spoke) setOrbMode('speaking')
+      else setOrbMode('monitoring')
+    } else {
+      setOrbMode('monitoring')
+    }
     window.setTimeout(() => {
       useOrbStore.getState().setPresence('monitoring')
       useOrbStore.getState().setMode('monitoring')
@@ -38,16 +61,52 @@ export function Composer({ onCompose }: { onCompose?: () => void }) {
     onCompose?.()
   }
 
-  const toggleVoice = async () => {
-    const ok = await audioService.enableMic()
-    if (ok) {
-      setOrbMode('listening')
-      pushToast({ title: 'Listening', message: 'Speak now, Sir. Say "stop" to end.', tone: 'info' })
+  const runVoiceTurn = () => {
+    stopHandsFree()
+    partialRef.current = ''
+    const handle = startVoiceTurn({
+      onPartial: (text) => {
+        partialRef.current = text
+        setText(text)
+      },
+    })
+    if (handle) {
+      voiceRef.current = handle
+      setListening(true)
     } else {
-      setOrbMode('listening')
-      pushToast({ title: 'Voice simulation', message: 'Simulated listening — awaiting input.', tone: 'info' })
+      setListening(false)
     }
-    window.setTimeout(() => setOrbMode('monitoring'), 6000)
+  }
+
+  const toggleVoice = async () => {
+    if (!voiceEnabled) {
+      pushToast({
+        title: 'Voice assistant is off',
+        message: 'Enable it in Settings, Sir.',
+        tone: 'info',
+      })
+      return
+    }
+    if (listening) {
+      voiceRef.current?.stop()
+      stopSpeaking()
+      setListening(false)
+      setOrbMode('monitoring')
+      return
+    }
+    if (!isSpeechSupported()) {
+      // Fall back to mic power-up so the orb still reacts even on unsupported browsers.
+      const ok = await audioService.enableMic()
+      setOrbMode('listening')
+      pushToast({
+        title: ok ? 'Microphone ready' : 'Voice simulation',
+        message: ok ? 'Speech recognition unsupported — orb listening enabled.' : 'Simulated listening — awaiting input.',
+        tone: 'info',
+      })
+      window.setTimeout(() => setOrbMode('monitoring'), 6000)
+      return
+    }
+    runVoiceTurn()
   }
 
   return (
@@ -109,9 +168,16 @@ export function Composer({ onCompose }: { onCompose?: () => void }) {
           )}
 
           <button
-            aria-label="Start voice mode"
+            aria-label="Start microphone fallback"
+            aria-pressed={listening}
+            disabled={!voiceEnabled}
             onClick={toggleVoice}
-            className="grid size-9 shrink-0 place-items-center rounded-xl text-muted transition-colors hover:bg-white/[0.06] hover:text-accent"
+            className={cn(
+              'grid size-9 shrink-0 place-items-center rounded-xl transition-colors disabled:opacity-40',
+              listening
+                ? 'bg-accent/15 text-accent'
+                : 'text-muted hover:bg-white/[0.06] hover:text-accent',
+            )}
           >
             <HiOutlineMicrophone className="size-4" />
           </button>

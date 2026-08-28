@@ -37,6 +37,12 @@ const PRESENCE: Record<PresenceMode, string[]> = {
     'All systems nominal',
     'Standing by',
   ],
+  thinking: [
+    'Thinking it through',
+    'Working out the details',
+    'Considering the options',
+    'Running the numbers',
+  ],
 }
 
 export function presenceFor(mode: PresenceMode, salt = 0): string {
@@ -51,4 +57,5 @@ export const PRESENCE_MODES: PresenceMode[] = [
   'summarizing',
   'learning',
   'ready',
+  'thinking',
 ]

@@ -25,6 +25,9 @@ export type PresenceMode =
   | 'summarizing'
   | 'learning'
   | 'ready'
+  | 'thinking'
+  | 'learning'
+  | 'ready'
 
 export interface Toast {
   id: string
@@ -213,6 +216,9 @@ export interface Job {
   aiRecommendation: 'top' | 'apply' | 'consider' | 'pass'
   expectedSalary: number
   postedDaysAgo: number
+  fetchedAt?: string
+  source: string
+  sourceUrl: string
   status: JobStatus
   logoHue?: number
 }
@@ -220,13 +226,12 @@ export interface Job {
 /* ---------- Intelligence ---------- */
 
 export type NewsCategory =
-  | 'AI'
-  | 'Programming'
   | 'Technology'
-  | 'Research'
-  | 'Cybersecurity'
+  | 'World'
+  | 'Sports'
   | 'Finance'
-  | 'Career'
+  | 'Trending'
+  | 'Latest'
 
 export interface Article {
   id: string
@@ -238,6 +243,24 @@ export interface Article {
   time: string
   relevance: number
   tags: string[]
+}
+
+export interface DailyForecast {
+  date: string
+  condition: string
+  tempMinC: number
+  tempMaxC: number
+}
+
+export interface Weather {
+  location: string
+  temperatureC: number
+  feelsLikeC: number
+  condition: string
+  humidity: number
+  windKmh: number
+  updatedAt: string
+  daily: DailyForecast[]
 }
 
 /* ---------- Automations ---------- */

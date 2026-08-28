@@ -5,7 +5,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { NAV_GROUPS } from './nav'
 import { cn } from '@/utils/cn'
 import { Tooltip, Avatar, Separator } from '@/components/ui'
-import { HiOutlineChevronLeft } from 'react-icons/hi2'
+import { HiOutlineChevronLeft, HiOutlineCpuChip } from 'react-icons/hi2'
 import { audioService } from '@/services/audio'
 
 function BrandMark({ expanded }: { expanded: boolean }) {

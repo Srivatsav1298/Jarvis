@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PageContainer, PageHeader } from '@/features/shared/PageContainer'
-import { ARTICLES, NEWS_CATEGORIES } from '@/services/intelligence'
+import { fetchArticles, NEWS_CATEGORIES } from '@/services/intelligence'
 import type { Article, NewsCategory } from '@/types'
 import { Badge, Tabs } from '@/components/ui'
 import { HiOutlineArrowRight, HiOutlineArrowTopRightOnSquare } from 'react-icons/hi2'
+import { WeatherCard } from '@/features/intelligence/WeatherCard'
 
 function ArticleCard({ article, index }: { article: Article; index: number }) {
   return (
@@ -57,13 +58,27 @@ function ArticleCard({ article, index }: { article: Article; index: number }) {
 export default function IntelligencePage() {
   const [category, setCategory] = useState<NewsCategory | 'All'>('All')
   const [query, setQuery] = useState('')
+  const [articles, setArticles] = useState<Article[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filtered = ARTICLES.filter((a) => {
-    if (category !== 'All' && a.category !== category) return false
-    if (query && !`${a.title} ${a.summary} ${a.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase()))
-      return false
-    return true
-  }).sort((a, b) => b.relevance - a.relevance)
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    fetchArticles(category, controller.signal)
+      .then(setArticles)
+      .finally(() => setLoading(false))
+    return () => controller.abort()
+  }, [category])
+
+  const filtered = useMemo(() => {
+    return articles
+      .filter((a) => {
+        if (query && !`${a.title} ${a.summary} ${a.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase()))
+          return false
+        return true
+      })
+      .sort((a, b) => b.relevance - a.relevance)
+  }, [articles, query])
 
   const topRelevance = filtered.filter((a) => a.relevance >= 90)
 
@@ -92,6 +107,10 @@ export default function IntelligencePage() {
           onChange={(id) => setCategory(id as NewsCategory | 'All')}
         />
 
+        <div className="mb-6">
+          <WeatherCard />
+        </div>
+
         <AnimatePresence mode="popLayout">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((a, i) => (
@@ -100,7 +119,11 @@ export default function IntelligencePage() {
           </div>
         </AnimatePresence>
 
-        {filtered.length === 0 && (
+        {loading && (
+          <div className="mt-10 text-center text-sm text-muted">Consulting the feeds, Sir…</div>
+        )}
+
+        {!loading && filtered.length === 0 && (
           <div className="mt-10 text-center text-sm text-muted">No intelligence matches, Sir.</div>
         )}
 

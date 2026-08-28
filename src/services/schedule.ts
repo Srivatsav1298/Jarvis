@@ -68,10 +68,10 @@ export const UPCOMING: UpcomingEvent[] = [
 
 export const WEATHER: WeatherSummary = {
   condition: 'Partly Cloudy',
-  tempC: 18,
-  tempF: 64,
-  chanceRain: 12,
-  wind: '14 km/h',
+  tempC: 19,
+  tempF: 66,
+  chanceRain: 20,
+  wind: '12 km/h',
   favorable: true,
-  city: 'San Francisco',
+  city: 'Asker, Norway',
 }

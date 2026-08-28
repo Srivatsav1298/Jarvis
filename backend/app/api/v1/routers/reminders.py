@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.envelope import ok
 from app.dependencies.database import get_db_session
 from app.exceptions import NotFoundError
 from app.repositories.implementations import ReminderRepository
@@ -12,40 +13,41 @@ from app.services.reminders import ReminderService
 router = APIRouter(prefix="/reminders", tags=["reminders"])
 
 
-@router.get("", response_model=ListResponse[ReminderRead])
+@router.get("")
 async def list_reminders(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-) -> ListResponse[ReminderRead]:
+) -> dict:
     """Return a page of reminders."""
     service = ReminderService(ReminderRepository(session))
     items, total = await service.list(limit=limit, offset=offset)
-    return ListResponse(items=items, total=total)
+    reads = [ReminderRead.model_validate(i) for i in items]
+    return ok(ListResponse(items=reads, total=total))
 
 
-@router.post("", response_model=ReminderRead, status_code=201)
+@router.post("", status_code=201)
 async def create_reminder(
     payload: ReminderCreate,
     session: AsyncSession = Depends(get_db_session),
-):
+) -> dict:
     """Create a reminder."""
     service = ReminderService(ReminderRepository(session))
-    return await service.create(payload)
+    return ok(ReminderRead.model_validate(await service.create(payload)))
 
 
-@router.patch("/{reminder_id}", response_model=ReminderRead)
+@router.patch("/{reminder_id}")
 async def update_reminder(
     reminder_id: str,
     payload: ReminderUpdate,
     session: AsyncSession = Depends(get_db_session),
-):
+) -> dict:
     """Update a reminder."""
     service = ReminderService(ReminderRepository(session))
     reminder = await service.update(reminder_id, payload)
     if reminder is None:
         raise NotFoundError("Reminder not found")
-    return reminder
+    return ok(ReminderRead.model_validate(reminder))
 
 
 @router.delete("/{reminder_id}", status_code=204)

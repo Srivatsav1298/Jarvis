@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { forwardRef, type ReactNode } from 'react'
 import { motion, type HTMLMotionProps } from 'framer-motion'
 import { cn } from '@/utils/cn'
 import { audioService } from '@/services/audio'
@@ -66,7 +66,7 @@ export function IconButton({
   className,
   children,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+}: Omit<HTMLMotionProps<'button'>, 'ref' | 'children'> & {
   label: string
   children: ReactNode
 }) {

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { jobLogoHue } from '@/services/jobs'
 import type { Job } from '@/types'
 import { Badge, Button, ProgressRing } from '@/components/ui'
-import { formatSalary } from '@/utils/format'
+import { formatSalary, relativeTime } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import { audioService } from '@/services/audio'
 import { useUIStore } from '@/stores/uiStore'
@@ -35,6 +35,24 @@ const REC_LABEL = {
 
 const REMOTE_LABEL = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' } as const
 
+const SOURCE_LABEL: Record<string, string> = {
+  'finn.no': 'Finn',
+  jobbnorge: 'Jobbnorge',
+  linkedin: 'LinkedIn',
+}
+
+function sourceLabel(source: string): string {
+  return SOURCE_LABEL[source] ?? (source ? source.charAt(0).toUpperCase() + source.slice(1) : 'Job board')
+}
+
+function postedTime(job: Job): string {
+  if (job.fetchedAt) {
+    const ts = new Date(job.fetchedAt).getTime()
+    if (Number.isFinite(ts)) return relativeTime(ts)
+  }
+  return `${job.postedDaysAgo}d ago`
+}
+
 export function JobCard({
   job,
   onSelect,
@@ -51,6 +69,22 @@ export function JobCard({
     setOrbMode('processing')
     pushToast({ title, message, tone: 'info' })
     window.setTimeout(() => useOrbStore.getState().setMode('completed'), 1800)
+  }
+
+  const apply = () => {
+    if (job.sourceUrl) {
+      audioService.play('click')
+      setOrbMode('processing')
+      window.open(job.sourceUrl, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => useOrbStore.getState().setMode('completed'), 1200)
+      pushToast({
+        title: 'Opening job post',
+        message: `Redirecting you to apply for ${job.role} at ${job.company}.`,
+        tone: 'info',
+      })
+      return
+    }
+    act('Application drafted', `Resume tailored for ${job.company}.`)
   }
 
   return (
@@ -88,11 +122,24 @@ export function JobCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <Badge tone={job.source === 'linkedin' ? 'accent' : job.source === 'finn.no' ? 'ok' : 'warn'}>
+          {sourceLabel(job.source)}
+        </Badge>
+        {job.sourceUrl && (
+          <a
+            href={job.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[10px] text-muted underline-offset-2 hover:text-accent hover:underline"
+          >
+            view post
+          </a>
+        )}
         <Badge>{REMOTE_LABEL[job.remote]}</Badge>
         <Badge>{job.location}</Badge>
-        <Badge tone="ok">{formatSalary(job.salary.min, job.salary.max)}</Badge>
+        <Badge tone="ok">{formatSalary(job.salary.min, job.salary.max, job.salary.currency)}</Badge>
         {job.visaSponsor && <Badge tone="accent">Visa ✓</Badge>}
-        <span className="ml-auto text-[10px] text-muted">{job.postedDaysAgo}d ago</span>
+        <span className="ml-auto text-[10px] text-muted">{postedTime(job)}</span>
       </div>
 
       <div className="mt-3 flex items-center gap-3 text-[11px] text-muted">
@@ -105,7 +152,7 @@ export function JobCard({
         <span className="flex items-center gap-1">
           <HiOutlineScale className="size-3.5" /> Competition {job.competition}/100
         </span>
-        <span className="ml-auto font-mono">Exp {formatSalary(job.expectedSalary, job.expectedSalary)}</span>
+        <span className="ml-auto font-mono">Exp {formatSalary(job.expectedSalary, job.expectedSalary, job.salary.currency)}</span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -127,7 +174,7 @@ export function JobCard({
       </button>
 
       <div className="mt-3 flex items-center gap-2 border-t border-white/[0.06] pt-3">
-        <Button size="sm" variant="primary" onClick={() => act('Application drafted', `Resume tailored for ${job.company}.`)}>
+        <Button size="sm" variant="primary" onClick={apply}>
           Apply
         </Button>
         <Button

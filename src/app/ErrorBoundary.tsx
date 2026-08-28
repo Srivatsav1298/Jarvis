@@ -6,17 +6,23 @@ interface Props {
 
 interface State {
   error: Error | null
+  restarting: boolean
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null, restarting: false }
 
   static getDerivedStateFromError(error: Error): State {
-    return { error }
+    return { error, restarting: false }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('[STARC] boundary caught:', error, info)
+  }
+
+  private restart = () => {
+    this.setState({ restarting: true })
+    window.setTimeout(() => window.location.reload(), 350)
   }
 
   render() {
@@ -29,10 +35,11 @@ export class ErrorBoundary extends Component<Props, State> {
               {this.state.error.message}
             </p>
             <button
-              onClick={() => window.location.reload()}
-              className="mt-4 rounded-[10px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-medium text-soft-white transition-colors hover:bg-white/10"
+              onClick={this.restart}
+              disabled={this.state.restarting}
+              className="mt-4 rounded-[10px] border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-medium text-soft-white transition-colors hover:bg-white/10 disabled:opacity-60"
             >
-              Restart STARC
+              {this.state.restarting ? 'Restarting…' : 'Restart STARC'}
             </button>
           </div>
         </div>

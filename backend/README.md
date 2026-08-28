@@ -93,12 +93,16 @@ All settings load from environment variables or `.env` via Pydantic
 | `CORS_ORIGINS` | `["http://localhost:5173", "http://localhost:4173"]` | JSON list of allowed CORS origins |
 | `LOG_LEVEL` | `INFO` | Root log level |
 | `LOG_FORMAT` | `json` | Log output format (`json` or plain) |
-| `AI_PROVIDER` | `openai` | AI provider name (placeholder — no AI yet) |
-| `AI_MODEL` | `gpt-4o-mini` | AI model name (placeholder) |
-| `AI_API_KEY` | *(empty)* | AI provider API key (placeholder) |
+| `AI_PROVIDER` | `ollama` | Local-first AI provider |
+| `AI_MODEL` | `llama3.2` | Ollama model name |
+| `AI_API_KEY` | *(empty)* | Only required by hosted providers |
+| `AI_ENABLE_LIVE_TOOLS` | `true` | Allow approved web/weather tools while generation remains local |
+| `AI_TOOL_CALL_LIMIT` | `4` | Maximum tool rounds per request |
+| `AI_TOOL_TIMEOUT_SECONDS` | `12` | Maximum time for one tool call |
 | `VOICE_ENABLED` | `false` | Voice features toggle (placeholder) |
 | `VOICE_STT_ENGINE` | *(empty)* | Speech-to-text engine (placeholder) |
 | `VOICE_TTS_ENGINE` | *(empty)* | Text-to-speech engine (placeholder) |
+| `VOICE_TTS_VOICE` | `en-GB` | British English voice profile |
 
 ## Run
 
@@ -142,9 +146,16 @@ uv run ruff check .
 
 ## API Reference
 
-All REST endpoints are served under the `/api/v1` prefix. Paginated list
-endpoints accept `limit` (1–200, default 20) and `offset` (default 0) query
-params and return a `ListResponse[T]` envelope: `{ "items": [...], "total": n }`.
+All REST endpoints are served under the `/api/v1` prefix. Every response is
+wrapped in a uniform envelope:
+
+```json
+{ "success": true, "data": { ... } }
+```
+
+Errors use `{ "success": false, "error": { "type", "title", "status", "code", "detail" } }`.
+Paginated list endpoints accept `limit` (1–200, default 20) and `offset`
+(default 0) query params and return `{ "items": [...], "total": n }` under `data`.
 
 ### Root
 
@@ -159,21 +170,44 @@ params and return a `ListResponse[T]` envelope: `{ "items": [...], "total": n }`
 | `GET` | `/api/v1/health/live` | Liveness probe — `{"status": "ok"}` while the process is up |
 | `GET` | `/api/v1/health/ready` | Readiness probe — verifies the database is reachable |
 | `GET` | `/api/v1/system/info` | Runtime metadata: name, version, environment, python, platform |
+| `GET` | `/api/v1/system/metrics` | Live host snapshot: cpu/ram/storage %, battery, network throughput, `api_latency_ms` |
 
 ### Chat
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/v1/chat/messages` | Persist a user message turn and return a mock assistant reply |
+| `POST` | `/api/v1/chat` | Start a streaming reply over WebSocket; returns `{ request_id, conversation_id, model }` |
 
-Request body: `{ "message": str, "conversation_id": str \| null }`. A new
-conversation is created when `conversation_id` is omitted; unknown IDs return 404.
+Request body (`/api/v1/chat/messages`): `{ "message": str, "conversation_id": str \| null }`.
+Request body (`/api/v1/chat`): `{ "message": str, "conversation_id": str \| null, "request_id": str }`.
+
+Streaming: `POST /api/v1/chat` returns immediately; the reply is streamed to all
+WebSocket clients as `chat.started → ai.thinking → chat.chunk* → chat.end`
+(or `chat.cancelled` if the client sends `chat.cancel`).
+
+### Conversations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/conversations` | List conversations, most-recently-updated first (paged) |
+| `POST` | `/api/v1/conversations` | Create a conversation (`201`) |
+| `GET` | `/api/v1/conversations/{conversation_id}` | Fetch a conversation with its messages |
+| `PATCH` | `/api/v1/conversations/{conversation_id}` | Update `title` / `pinned` |
+| `DELETE` | `/api/v1/conversations/{conversation_id}` | Delete a conversation and its messages (`204`) |
+
+### Preferences
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/preferences` | Return all preferences as a key/value map |
+| `PUT` | `/api/v1/preferences` | Merge a partial map into stored preferences |
 
 ### Memory
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/memory/entries` | List memory entries (paged) |
+| `GET` | `/api/v1/memory/entries` | List memory entries (paged); `?kind=` filters by kind |
 | `POST` | `/api/v1/memory/entries` | Create a memory entry (`201`) |
 | `GET` | `/api/v1/memory/entries/{entry_id}` | Fetch a single entry |
 | `PATCH` | `/api/v1/memory/entries/{entry_id}` | Update a memory entry (re-embeds when content changes) |
@@ -184,7 +218,7 @@ conversation is created when `conversation_id` is omitted; unknown IDs return 40
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/notifications` | List notifications (paged) |
-| `POST` | `/api/v1/notifications` | Create a notification (`201`) |
+| `POST` | `/api/v1/notifications` | Create a notification (`201`) and broadcast `notification.created` over WebSocket |
 | `PATCH` | `/api/v1/notifications/{notification_id}/read` | Mark read/unread via `?read=true\|false` query param |
 | `DELETE` | `/api/v1/notifications/{notification_id}` | Delete a notification (`204`) |
 
@@ -232,8 +266,21 @@ ping and the server replies with a pong echoing the client timestamp:
 { "type": "ping", "ts": 1700000000000 }   →   { "type": "pong", "payload": { "ts": 1700000000000 } }
 ```
 
-Supported message types are defined in `app/websocket/protocol.py`
-(`hello`, `ping`, `pong`, `heartbeat`, `broadcast`, `error`, `system`).
+Supported message types are defined in `app/websocket/events.py`. The protocol
+envelopes messages as `{ "version": 1, "type": "<type>", "payload": { ... } }`.
+
+Server→client events include:
+
+| Type | Payload |
+|------|---------|
+| `hello` | `{ active }` — sent on connect |
+| `pong` | `{ ts }` — reply to a client `ping` |
+| `system.metrics` | Live CPU/RAM/storage/battery/network snapshot (pushed every second, delta-gated) |
+| `notification.created` | A notification persisted via `POST /api/v1/notifications` |
+| `chat.started` / `ai.thinking` / `chat.chunk` / `chat.end` / `chat.cancelled` | Streaming chat lifecycle for a `request_id` |
+
+Client→server events include `ping` (keepalive) and `chat.cancel`
+`{ "payload": { "request_id": "..." } }` to stop a running stream.
 
 ## Verification Checklist
 

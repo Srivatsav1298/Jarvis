@@ -32,19 +32,65 @@ dependencies  schemas      (session via DI)
 | `app/api/v1/router.py` | Aggregates all routers under the `/api/v1` prefix |
 | `app/api/v1/routers/` | One router per resource; HTTP boundary only |
 | `app/schemas/` | Pydantic request/response contracts (incl. `ListResponse[T]`) |
-| `app/services/` | Domain logic per resource (chat, notifications, reminders, projects, settings, system) |
+| `app/services/` | Domain logic per resource (chat, conversations, notifications, preferences, projects, reminders, settings, system, voice pipeline) |
 | `app/repositories/` | `Repository` interface + `SQLAlchemyRepository` implementation |
 | `app/database/` | Declarative `Base`, async engine builder, session factory |
 | `app/models/` | ORM models, all registered on `Base.metadata` |
 | `app/dependencies/` | DI providers (`get_db_session` reads `app.state.session_factory`) |
 | `app/exceptions/` | `JARVISError` hierarchy + FastAPI handlers for a uniform error envelope |
 | `app/middleware/` | CORS configuration and request logging (`X-Process-Time-Ms` header) |
-| `app/websocket/` | `ConnectionManager` (connect/send/broadcast/heartbeat) and message envelopes |
+| `app/websocket/` | `ConnectionManager` (connect/send/broadcast/subscribe) and versioned message envelopes |
+| `app/providers/` | Injectable sinks: `MetricsProvider` (psutil snapshot) and `NotificationPublisher` (WebSocket) |
+| `app/ai/` | AI layer: providers, conversation engine, tools, planner, memory intelligence, voice, events, skills, plugins, runtime config, performance, observability |
+| `app/core/` | Shared constants |
 | `app/scheduler/` | Minimal asyncio periodic-task scheduler |
-| `app/memory/` | `MemoryManager` — memory entry CRUD plus a deterministic search stub |
-| `app/tools/` | `ToolRegistry` for future AI-callable tools |
+| `app/memory/` | `MemoryManager` — memory CRUD plus `MemoryIntelligence` ranking/consolidation |
 | `app/utils/` | Logging helpers, UUID id generation, UTC datetime helpers |
-| `app/core/` | Shared constants (sweep interval, page sizes, environment enum) |
+
+## AI Layer
+
+The AI functionality lives under `app/ai/`, structured provider-agnostically and
+local-first. Dependencies flow inward: adapters → registry → conversation engine
+→ tools/planner → memory/voice/events → skills/plugins/observability. No module
+hardcodes a provider — all reachability is decided by `factory` auto-routing.
+
+```
+app/ai/
+├── providers/      # provider adapters (ollama, openai-compat, gemini, fallback)
+│   ├── base.py     #   AIProvider ABC + Message/Chunk/ProviderReply
+│   ├── factory.py  #   build_provider() auto-routing + health gate
+│   └── registry.py #   AIManager (retry, auto-fallback, event emission)
+├── conversation/   # ConversationManager, ContextBuilder, PromptBuilder,
+│                   #   SessionManager, TokenBudget, factory (wires MemoryIntelligence)
+├── tools/          # ToolRegistry + 8 built-ins (calculator, datetime, memory,
+│                   #   projects, reminders, notifications, web_search, weather)
+├── planner/        # planner.py — tool-loop orchestration with keyword fallback
+├── memory/         # intelligence.py — embedding-free ranking + consolidation
+├── voice/          # STT/TTS/wake-word engines (offline fallbacks), factory
+├── events/         # EventBus + typed EventRegistry (chat/ai/planner/voice/memory/system)
+├── skills/         # Skill, SkillRegistry, discovery (.md/.yaml frontmatter)
+├── plugins/        # Plugin, loader, PluginManager lifecycle
+├── config/         # runtime.py — live RuntimeConfig over Settings
+├── performance/    # cache.py (AsyncCache), limiter.py (AsyncLimiter)
+└── observability/  # metrics.py (AIMetrics), tracing.py (Tracer), factory
+```
+
+Chat flow: the REST/WS endpoints call `ChatStreamManager` (in
+`app/services/chat_stream_manager.py`), which builds an `AIManager` + conversation
+factory per request and streams `chat.started → ai.thinking → chat.chunk* →
+chat.end` events over the WebSocket while persisting the assistant message with
+latency/tokens.
+
+## Provider Auto-Routing
+
+`build_provider()` in `app/ai/providers/factory.py` resolves the active provider:
+
+1. It reads `Settings.ai_provider` (default `ollama`) and probes the provider's
+   health (Ollama: GET `/api/tags`).
+2. If the provider is unhealthy and `Settings.ai_auto_fallback` is enabled, it
+   falls back through `Settings.ai_fallback_provider` (default `fallback`).
+3. The resolved provider + routing decision are exposed on `AIManager` and
+   included in chat responses. See [`PROVIDERS.md`](PROVIDERS.md).
 
 ## Request Lifecycle
 
@@ -81,6 +127,12 @@ graph TD
     Service --> Base[Base.metadata]
     Middleware --> Router
     Exceptions --> Client
+    ChatService --> AIManager[ai/providers/registry]
+    AIManager --> Provider[ai/providers/factory]
+    AIManager --> Events[ai/events EventBus]
+    ChatService --> Convo[ai/conversation factory]
+    Convo --> MemoryIntel[ai/memory/intelligence]
+    Planner[ai/planner] --> Tools[ai/tools ToolRegistry]
 ```
 
 ## WebSocket Message Flow

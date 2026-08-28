@@ -1,20 +1,29 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, PanelHeader, Icon, Badge, ProgressRing } from '@/components/ui'
-import { JOBS } from '@/services/jobs'
-import { jobLogoHue } from '@/services/jobs'
+import { fetchJobs, jobLogoHue } from '@/services/jobs'
 import { formatSalary } from '@/utils/format'
 import { motion } from 'framer-motion'
 import { HiOutlineArrowRight } from 'react-icons/hi2'
+import type { Job } from '@/types'
 
 export function CareerSummary() {
   const navigate = useNavigate()
-  const top = JOBS.filter((j) => j.aiRecommendation === 'top').slice(0, 2)
+  const [jobs, setJobs] = useState<Job[]>([])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchJobs(undefined, controller.signal).then(setJobs).catch(() => setJobs([]))
+    return () => controller.abort()
+  }, [])
+
+  const top = jobs.filter((j) => j.aiRecommendation === 'top').slice(0, 2)
 
   return (
     <Card className="p-4">
       <PanelHeader
         title="Career Summary"
-        subtitle={`${JOBS.length} active matches · ${JOBS.filter((j) => j.status === 'interview').length} interviews`}
+        subtitle={`${jobs.length} active matches · ${jobs.filter((j) => j.status === 'interview').length} interviews`}
         icon={<Icon name="briefcase" className="size-4" />}
         action={
           <button
@@ -47,7 +56,7 @@ export function CareerSummary() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] font-medium text-soft-white">{j.role}</p>
               <p className="truncate text-[11px] text-muted">
-                {j.company} · {formatSalary(j.salary.min, j.salary.max)}
+                {j.company} · {formatSalary(j.salary.min, j.salary.max, j.salary.currency)}
               </p>
             </div>
             <ProgressRing value={j.match / 100} size={38} stroke={3.5}>
@@ -59,7 +68,7 @@ export function CareerSummary() {
       <div className="mt-3 flex items-center gap-2">
         <Badge tone="accent">Top matches</Badge>
         <span className="text-[10px] text-muted">
-          2 new roles matched in the last 6h
+          Refreshed from live boards at 07:00
         </span>
       </div>
     </Card>

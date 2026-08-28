@@ -1,6 +1,6 @@
 import { cn } from '@/utils/cn'
 
-type StatusTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'accent' | 'active'
+export type StatusTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'accent' | 'active'
 
 const dot: Record<StatusTone, string> = {
   neutral: 'bg-silver',

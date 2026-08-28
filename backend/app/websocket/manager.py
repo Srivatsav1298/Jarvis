@@ -15,6 +15,7 @@ class ConnectionManager:
         self._connections: set[WebSocket] = set()
         self._lock = asyncio.Lock()
         self._logger = get_logger("websocket")
+        self._handlers: dict[str, list] = {}
 
     @property
     def active_count(self) -> int:
@@ -53,8 +54,12 @@ class ConnectionManager:
         for client in list(self._connections):
             await self.send(client, data)
 
+    def subscribe(self, msg_type: str, handler) -> None:
+        """Register a handler invoked for every matching incoming message type."""
+        self._handlers.setdefault(msg_type, []).append(handler)
+
     async def handle(self, websocket: WebSocket) -> None:
-        """Run the receive loop: respond to pings, ignore the rest."""
+        """Run the receive loop: respond to pings, dispatch to handlers."""
         await self.connect(websocket)
         try:
             while True:
@@ -63,6 +68,8 @@ class ConnectionManager:
                     await self.send(
                         websocket, envelope(MSG_PONG, {"ts": raw.get("ts")})
                     )
+                for handler in self._handlers.get(raw.get("type"), []):
+                    await handler(raw)
         except Exception:  # noqa: BLE001
             pass
         finally:

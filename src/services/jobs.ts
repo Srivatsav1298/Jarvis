@@ -1,173 +1,86 @@
-import type { Job } from '@/types'
+import { api } from '@/services/api'
+import type { Job, JobStatus } from '@/types'
 import { hash01 } from '@/utils/random'
 
 export function jobLogoHue(company: string): number {
   return Math.round(hash01(company) * 220)
 }
 
-export const JOBS: Job[] = [
-  {
-    id: 'j1',
-    company: 'Nova Systems',
-    role: 'Staff Platform Engineer',
-    location: 'San Francisco, CA',
-    remote: 'hybrid',
-    salary: { min: 210, max: 260, currency: '$' },
-    visaSponsor: true,
-    match: 94,
-    interviewProbability: 82,
-    growthPotential: 91,
-    competition: 23,
-    skills: ['Rust', 'Kubernetes', 'Distributed Systems', 'Observability'],
-    aiSummary:
-      'Exceptional match. Your Rust and distributed systems background aligns directly with their platform team’s roadmap. Series C company with a 2x team expansion planned. High growth, low competition.',
-    aiRecommendation: 'top',
-    expectedSalary: 235,
-    postedDaysAgo: 1,
-    status: 'interview',
-  },
-  {
-    id: 'j2',
-    company: 'Helios AI',
-    role: 'Senior Backend Engineer — CUDA',
-    location: 'Remote (US)',
-    remote: 'remote',
-    salary: { min: 195, max: 240, currency: '$' },
-    visaSponsor: true,
-    match: 91,
-    interviewProbability: 76,
-    growthPotential: 88,
-    competition: 31,
-    skills: ['CUDA', 'C++', 'LLM Inference', 'Rust'],
-    aiSummary:
-      'Strong fit for your CUDA and LLM inference work. Fully remote with a serious compute budget. Interview pipeline is fast — average offer in 2.5 weeks.',
-    aiRecommendation: 'top',
-    expectedSalary: 218,
-    postedDaysAgo: 2,
-    status: 'saved',
-  },
-  {
-    id: 'j3',
-    company: 'Arc Labs',
-    role: 'Senior Systems Engineer',
-    location: 'New York, NY',
-    remote: 'hybrid',
-    salary: { min: 185, max: 225, currency: '$' },
-    visaSponsor: false,
-    match: 88,
-    interviewProbability: 64,
-    growthPotential: 79,
-    competition: 44,
-    skills: ['Systems Programming', 'Networking', 'Go'],
-    aiSummary:
-      'Very good match, but no visa sponsorship. Competition is moderate. Worth applying if the relocation budget clears.',
-    aiRecommendation: 'apply',
-    expectedSalary: 205,
-    postedDaysAgo: 3,
-    status: 'new',
-  },
-  {
-    id: 'j4',
-    company: 'Vertex Robotics',
-    role: 'Principal AI Engineer',
-    location: 'Boston, MA',
-    remote: 'onsite',
-    salary: { min: 220, max: 275, currency: '$' },
-    visaSponsor: true,
-    match: 84,
-    interviewProbability: 71,
-    growthPotential: 93,
-    competition: 18,
-    skills: ['Robotics', 'Reinforcement Learning', 'C++', 'CUDA'],
-    aiSummary:
-      'Ambitious role with exceptional growth potential and very low competition. Requires 4 days onsite in Boston. RL and robotics depth would strengthen your candidacy.',
-    aiRecommendation: 'apply',
-    expectedSalary: 248,
-    postedDaysAgo: 4,
-    status: 'new',
-  },
-  {
-    id: 'j5',
-    company: 'Meridian Bank',
-    role: 'Senior Platform Engineer',
-    location: 'Chicago, IL',
-    remote: 'hybrid',
-    salary: { min: 170, max: 200, currency: '$' },
-    visaSponsor: true,
-    match: 76,
-    interviewProbability: 58,
-    growthPotential: 55,
-    competition: 37,
-    skills: ['Java', 'AWS', 'Terraform'],
-    aiSummary:
-      'Reasonable match in financial services. Compensation is below your expected range and growth is limited. Only worth pursuing as a safety option.',
-    aiRecommendation: 'consider',
-    expectedSalary: 185,
-    postedDaysAgo: 6,
-    status: 'new',
-  },
-  {
-    id: 'j6',
-    company: 'Forge Software',
-    role: 'Backend Engineer',
-    location: 'Remote (Global)',
-    remote: 'remote',
-    salary: { min: 140, max: 165, currency: '$' },
-    visaSponsor: false,
-    match: 68,
-    interviewProbability: 49,
-    growthPotential: 62,
-    competition: 58,
-    skills: ['Node.js', 'PostgreSQL', 'Docker'],
-    aiSummary:
-      'Below your target seniority and compensation. High competition with limited upside. I would pass unless you want a lighter workload.',
-    aiRecommendation: 'pass',
-    expectedSalary: 152,
-    postedDaysAgo: 8,
-    status: 'new',
-  },
-  {
-    id: 'j7',
-    company: 'Orbit Health',
-    role: 'Staff Software Engineer',
-    location: 'Austin, TX',
-    remote: 'remote',
-    salary: { min: 200, max: 245, currency: '$' },
-    visaSponsor: true,
-    match: 86,
-    interviewProbability: 69,
-    growthPotential: 74,
-    competition: 29,
-    skills: ['TypeScript', 'Healthcare', 'AWS'],
-    aiSummary:
-      'Strong match on seniority and remote flexibility. Healthcare domain adds stability. Competition is low.',
-    aiRecommendation: 'apply',
-    expectedSalary: 222,
-    postedDaysAgo: 2,
-    status: 'saved',
-  },
-  {
-    id: 'j8',
-    company: 'Cortex Dynamics',
-    role: 'Performance Engineer',
-    location: 'Seattle, WA',
-    remote: 'hybrid',
-    salary: { min: 190, max: 235, currency: '$' },
-    visaSponsor: true,
-    match: 89,
-    interviewProbability: 78,
-    growthPotential: 85,
-    competition: 21,
-    skills: ['CUDA', 'C++', 'Benchmarking', 'LLM'],
-    aiSummary:
-      'A near-perfect fit for your performance engineering profile. Their team works on latency-critical inference. High interview probability and low competition.',
-    aiRecommendation: 'top',
-    expectedSalary: 212,
-    postedDaysAgo: 1,
-    status: 'new',
-  },
-]
+interface RawJob {
+  id?: string
+  company?: string
+  role?: string
+  location?: string
+  source?: string
+  sourceUrl?: string
+  postedDaysAgo?: number
+  fetchedAt?: string
+  skills?: unknown
+  aiSummary?: string
+  aiRecommendation?: string
+  match?: number
+  salary?: { min?: number; max?: number; currency?: string }
+  visaSponsor?: boolean
+  remote?: string
+}
 
-export function jobById(id: string): Job | undefined {
-  return JOBS.find((j) => j.id === id)
+function clamp(v: number, lo = 0, hi = 100): number {
+  return Math.max(lo, Math.min(hi, v))
+}
+
+function normalizeJob(raw: RawJob): Job {
+  const match = clamp(typeof raw.match === 'number' ? raw.match : 60)
+  const salary = raw.salary ?? {}
+  const min = typeof salary.min === 'number' ? salary.min : 0
+  const max = typeof salary.max === 'number' ? salary.max : min
+  const skills = Array.isArray(raw.skills)
+    ? raw.skills.filter((s): s is string => typeof s === 'string').slice(0, 8)
+    : []
+  const rec = raw.aiRecommendation ?? (match >= 85 ? 'top' : match >= 70 ? 'apply' : 'consider')
+  const status: JobStatus = ['saved', 'applied', 'interview', 'offer', 'new'].includes(
+    raw.aiRecommendation ?? '',
+  )
+    ? (raw.aiRecommendation as JobStatus)
+    : 'new'
+  return {
+    id: typeof raw.id === 'string' ? raw.id : `j-${Math.random().toString(36).slice(2, 8)}`,
+    company: raw.company || 'Unknown',
+    role: raw.role || 'Role',
+    location: raw.location || 'Norway',
+    remote: raw.remote === 'remote' ? 'remote' : raw.remote === 'onsite' ? 'onsite' : 'hybrid',
+    salary: { min, max, currency: salary.currency ?? 'kr' },
+    visaSponsor: raw.visaSponsor === true,
+    match,
+    interviewProbability: clamp(match - 18),
+    growthPotential: clamp(Math.round(match * 0.82)),
+    competition: clamp(Math.round((100 - match) / 2.4)),
+    skills,
+    aiSummary: raw.aiSummary || `Matched for ${raw.role || 'this role'} at ${raw.company || 'this company'}.`,
+    aiRecommendation: rec as Job['aiRecommendation'],
+    expectedSalary: max > 0 ? Math.round((min + max) / 2) : 0,
+    postedDaysAgo: typeof raw.postedDaysAgo === 'number' ? raw.postedDaysAgo : 0,
+    fetchedAt: typeof raw.fetchedAt === 'string' ? raw.fetchedAt : undefined,
+    source: raw.source || '',
+    sourceUrl: raw.sourceUrl || '',
+    status,
+  }
+}
+
+export async function fetchJobs(
+  role?: string,
+  signal?: AbortSignal,
+  fresh = false,
+): Promise<Job[]> {
+  const params = new URLSearchParams()
+  if (role) params.set('role', role)
+  params.set('limit', '40')
+  if (fresh) params.set('fresh', 'true')
+  const raw = await api.get<unknown[]>(
+    `/intelligence/jobs${params.size ? `?${params.toString()}` : ''}`,
+    { signal, retries: 1 },
+  )
+  if (!Array.isArray(raw)) throw new Error('unexpected jobs payload')
+  return raw
+    .filter((j): j is RawJob => typeof j === 'object' && j !== null)
+    .map(normalizeJob)
 }

@@ -17,10 +17,13 @@ with a real LLM call. Config placeholders already exist in `Settings`
 
 ## 2. Streaming Tokens over WebSocket
 
-Add streaming message types to the WS protocol (`app/websocket/protocol.py`):
+A deterministic mock stream is wired end-to-end: `POST /api/v1/chat` returns a
+`request_id` and a `ChatStreamManager` runs per-request tasks that emit
+`chat.started → ai.thinking → chat.chunk* → chat.end` (or `chat.cancelled` on a
+`chat.cancel`). The next step is swapping the mock reply for real model tokens:
 
-- `stream.token` — one token chunk per frame as the model generates.
-- `stream.end` — final frame with usage stats (tokens, latency, finish reason).
+- Add `stream.token` / `stream.end` frames with usage stats (tokens, latency, finish reason).
+- Persist real token stream and delete-original behavior remains unchanged.
 
 The `ConnectionManager` already provides `broadcast()` and per-client `send()`;
 the scheduler loop and WS receive loop are the natural integration points.
@@ -62,10 +65,11 @@ Placeholder settings exist (`voice_enabled`, `voice_stt_engine`, `voice_tts_engi
 
 ## 7. Notification Push
 
-`NotificationService` + endpoints are done; the scheduler sweep currently only
-counts due reminders and logs.
+`NotificationService.publish(payload, publisher)` persists a notification and
+dispatches it through a `NotificationPublisher` sink. A `WebSocketNotifier`
+broadcasts `notification.created` to all connected clients on `POST /api/v1/notifications`.
 
-- Emit `broadcast` WS events when a reminder comes due or a notification is created.
+- Remaining: emit on reminder-due (the sweep still only counts due reminders and logs).
 - Optionally integrate OS push for the desktop/mobile client.
 
 ## 8. Containerization & CI
@@ -75,9 +79,12 @@ counts due reminders and logs.
 - **CI**: GitHub Actions running `ruff check`, `pytest`, and `mypy` on push/PR.
   Add `mypy` to the dev dependency group and a `[tool.mypy]` config.
 
-## Current Status (at Task 9)
+## Current Status
 
-- All 8 REST routers live under `app/api/v1/routers/`.
-- All 8 models, config, WS infra, structured logging, background scheduler,
-  middleware, lifespan, tests, and docs are present.
-- Chat and memory respond deterministically; no AI or auth yet.
+- REST routers: health, system (info + live metrics), chat (POST + WS stream),
+  conversations, notifications (+ WS publish), preferences, memory (with `kind`
+  filter), settings, projects, reminders.
+- Streaming chat over WebSocket with `request_id` + cancellation; metrics pushed
+  every second (delta-gated); notification broadcasts.
+- All responses use the `{ success, data }` / `{ success, error }` envelope.
+- Chat and memory remain deterministic; no AI or auth yet.

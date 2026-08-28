@@ -1,5 +1,6 @@
 """ORM models. Importing this module registers all tables on Base.metadata."""
 from app.models.conversation import Conversation
+from app.models.job import Job
 from app.models.memory_entry import MemoryEntry
 from app.models.message import Message
 from app.models.notification import Notification
@@ -17,4 +18,5 @@ __all__ = [
     "Reminder",
     "MemoryEntry",
     "SettingsRecord",
+    "Job",
 ]

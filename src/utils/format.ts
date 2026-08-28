@@ -22,7 +22,7 @@ export function shortDate(date = new Date()): string {
   })
 }
 
-export function timeOfDay(date = new Date()): string {
+export function timeOfDay(date = new Date()): 'morning' | 'afternoon' | 'evening' | 'night' {
   const h = date.getHours()
   if (h < 5) return 'night'
   if (h < 12) return 'morning'
@@ -32,13 +32,13 @@ export function timeOfDay(date = new Date()): string {
 }
 
 export function greeting(date = new Date()): string {
-  const t = timeOfDay(date)
-  return {
+  const labels = {
     morning: 'Good Morning',
     afternoon: 'Good Afternoon',
     evening: 'Good Evening',
     night: 'Good Night',
-  }[t]
+  } as const
+  return labels[timeOfDay(date)]
 }
 
 export function relativeTime(ts: number): string {
@@ -71,8 +71,10 @@ export function formatUptime(seconds: number): string {
 }
 
 export function formatSalary(min: number, max: number, currency = '$'): string {
-  const f = (n: number) =>
-    `${currency}${Math.round(n / 1000)}k`.replace(/\$/g, currency === '$' ? '$' : currency)
+  const f = (n: number) => {
+    const k = Math.round(n / 1000)
+    return currency === 'kr' ? `${k}k kr` : `${currency}${k}k`
+  }
   return `${f(min)} – ${f(max)}`
 }
 

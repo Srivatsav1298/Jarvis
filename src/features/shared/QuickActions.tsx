@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useVoiceStore } from '@/stores/voiceStore'
+import { startHandsFree, stopHandsFree } from '@/services/voiceController'
 import { Icon } from '@/components/ui'
 import { useUIStore } from '@/stores/uiStore'
 import { useOrbStore } from '@/stores/orbStore'
@@ -31,9 +33,20 @@ export function QuickActions() {
   const actions: QuickAction[] = [
     {
       id: 'voice',
-      label: 'Voice Mode',
+      label: 'Hands-free Voice',
       icon: 'microphone',
-      run: () => simulate('Voice mode ready', 'Listening, Sir.', 'listening'),
+      run: () => {
+        const state = useVoiceStore.getState().interactionState
+        if (state !== 'IDLE' && state !== 'ERROR') {
+          stopHandsFree()
+          setOrbMode('monitoring')
+          pushToast({ title: 'Hands-free voice stopped', message: 'Wake listening ended.', tone: 'info' })
+          return
+        }
+        if (startHandsFree()) {
+          pushToast({ title: 'Hands-free voice ready', message: 'Say “Hey Starc” or “Starc”.', tone: 'success' })
+        }
+      },
     },
     {
       id: 'newchat',

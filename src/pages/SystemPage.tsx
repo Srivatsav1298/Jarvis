@@ -182,7 +182,7 @@ export default function SystemPage() {
             status="neutral"
             history={m.history.gpu}
           >
-            <ProgressBar value={m.gpu / 100} tone="silver" />
+            <ProgressBar value={m.gpu / 100} tone="default" />
           </HealthTile>
 
           <HealthTile

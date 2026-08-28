@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Card, PanelHeader, Icon, StatusDot } from '@/components/ui'
+import { Card, PanelHeader, Icon, StatusDot, type StatusTone } from '@/components/ui'
 import { useMetricsStore } from '@/stores/metricsStore'
 import { HiOutlineArrowRight } from 'react-icons/hi2'
 import { cn } from '@/utils/cn'
@@ -8,7 +8,7 @@ export function SystemHealth() {
   const navigate = useNavigate()
   const m = useMetricsStore()
 
-  const items = [
+  const items: { label: string; value: string; tone: StatusTone }[] = [
     { label: 'CPU', value: `${Math.round(m.cpu)}%`, tone: m.cpu > 80 ? 'warn' : 'ok' },
     { label: 'RAM', value: `${Math.round(m.ram)}%`, tone: m.ram > 85 ? 'warn' : 'ok' },
     { label: 'Temp', value: `${Math.round(m.temperature)}°C`, tone: m.temperature > 72 ? 'warn' : 'ok' },

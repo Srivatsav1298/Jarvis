@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-08-03T22:27:14.309Z",
+  "projectRoot": "/Users/vatsavabbu/Projects/Jarvis",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": true,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1785796034310
+}

@@ -37,7 +37,7 @@
 **Interfaces:**
 - Produces: `events.py` exports all namespaced WS type constants (single source of truth — frontend mirrors in `src/services/events.ts` later); `protocol.py` exports `envelope(type_, payload=None) -> dict` returning `{"version":1,"type":...,"payload":...}` and a `VERSION = 1` constant.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/websocket/test_events.py`:
 ```python
@@ -239,7 +239,7 @@ def test_not_found_is_error_envelope():
 Run: `cd backend && uv run pytest tests/api/test_envelope.py -q`
 Expected: FAIL — old shape has no `success` key.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/api/envelope.py`:
 ```python
@@ -561,7 +561,7 @@ git commit -m "feat(metrics): psutil MetricsProvider, /system/metrics, WS metric
 **Interfaces:**
 - Produces: `conversations` table has `pinned (Bool, default False)`, `last_model (str, null)`, `last_activity (DateTime, null)`, `message_count (int, default 0)`, `created_by (str, null)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `backend/tests/unit/test_models.py`:
 ```python
@@ -638,7 +638,7 @@ git commit -m "feat(models): conversation metadata columns + migration"
 - `ConversationRead`: `{id,title,pinned,created_by,last_model,last_activity,message_count,updated_at,created_at}`.
 - `MessageRead`: `{id,conversation_id,role,content,created_at,tokens,latency_ms}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/api/test_conversations.py`:
 ```python
@@ -685,7 +685,7 @@ def test_conversation_requires_valid_uuid_format_ok():
 
 - [ ] **Step 2: run to verify fail** — `uv run pytest tests/api/test_conversations.py -q` → FAIL (`/api/v1/conversations` 404).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/services/conversations.py`:
 ```python
@@ -786,7 +786,7 @@ class MessageRepository(SQLAlchemyRepository[Message]):
 - `mock_reply_content(prompt) -> str` (deterministic, tokenized).
 - `broadcaster` is an async callable `(type_, payload) -> None` (bound to `ws_manager.broadcast` with `envelope(...)` at the api layer).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/api/test_chat_stream.py` (WS-first):
 ```python
@@ -853,7 +853,7 @@ Note: the mock reply is short, so `chat.end` may race the cancel; in that case a
 
 - [ ] **Step 2: run to verify fail** — `uv run pytest tests/api/test_chat_stream.py -q` → FAIL (no `/api/v1/chat`, and WS loop never yields `chat.*`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/services/mock_reply.py`:
 ```python
@@ -1039,7 +1039,7 @@ manager.subscribe("chat.cancel", cancel_chat)
 - `ApiError { status, code, title, detail } extends Error`.
 - `vite.config.ts` adds `server.proxy` for `/api` and `/ws`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `src/test/api.test.ts`:
 ```ts
@@ -1075,9 +1075,9 @@ describe('api', () => {
 })
 ```
 
-- [ ] **Step 2: run to verify fail** — `npm run test` fails (`api` undefined).
+- [x] **Step 2: run to verify fail** — `npm run test` fails (`api` undefined).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/types/api.ts`:
 ```ts
@@ -1175,7 +1175,7 @@ export const api = {
 }
 ```
 
-- [ ] **Step 4: run tests + tsc** — `npm run test` (api tests pass) and `npm run typecheck` clean.
+- [x] **Step 4: run tests + tsc** — `npm run test` (api tests pass) and `npm run typecheck` clean.
 
 - [ ] **Step 5: Commit** — `feat(web): API client with envelope + retry`.
 
@@ -1193,7 +1193,7 @@ export const api = {
 - `WsClient` (singleton export `socket`): `connect(url='/ws')`, `close()`, `subscribe(type, cb)->unsubscribe`, `get status(): 'idle'|'connecting'|'open'|'reconnecting'|'closed'`, `get latencyMs()`, `get reconnectCount()`, `get lastPingAt()`; sends `{version:1,type:'ping',payload:{ts}}` every 30s while open; reconnect backoff 1000ms→30000ms.
 - `connectionStore` (zustand): `{ api:'ok'|'error', ws: status, latency, reconnectCount, lastPingAt, setWsStatus, setLatency, setApiStatus, setReconnectCount }`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `src/test/ws.test.ts`:
 ```ts
@@ -1250,7 +1250,7 @@ it('connects, sends ping, computes latency from pong', async () => {
 
 - [ ] **Step 2: run to verify fail** — `npm run test` fails (`// @/services/ws`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/services/events.ts`:
 ```ts
@@ -1354,7 +1354,7 @@ export class WsClient {
 export const socket = new WsClient()
 ```
 
-- [ ] **Step 4: run + typecheck** — `npm run test` and `npm run typecheck` green; lint clean.
+- [x] **Step 4: run + typecheck** — `npm run test` and `npm run typecheck` green; lint clean.
 
 - [ ] **Step 5: Commit** — `feat(web): WS client + connection store + event constants`.
 
@@ -1379,8 +1379,8 @@ export const socket = new WsClient()
 - Modify: `src/services/chat.ts` (drop mock; export `streamChat`), `src/stores/chatStore.ts`.
 - Test: `src/test/chat.test.ts` (mock both `api.post /chat` and ws `chat.*`).
 
-- [ ] `streamChat({conversationId, prompt, requestId, signal})` → POST `/chat`, subscribe `chat.*`, yield token strings; on `signal` abort → send `chat.cancel`.
-- [ ] `chatStore` seeds via `GET /conversations`; send path uses `streamChat`; delete/pin via API; `new conversation` → POST `/conversations`.
+- [x] `streamChat({conversationId, prompt, requestId, signal})` → POST `/chat`, subscribe `chat.*`, yield token strings; on `signal` abort → send `chat.cancel`.
+- [x] `chatStore` seeds via `GET /conversations`; send path uses `streamChat`; delete/pin via API; `new conversation` → POST `/conversations`.
 - [ ] Update tests + commit `feat(chat): real streaming over WS`.
 
 ---
@@ -1392,14 +1392,14 @@ export const socket = new WsClient()
 - Create: `src/stores/notificationStore.ts`.
 - Test: `src/test/notificationStore.test.ts`, `src/test/memoryStore.test.ts`.
 
-- [ ] NotificationCenter loads `GET /notifications`, subscribes `notification.created`, map severity→toast, mark-read `PATCH`; unread badge from store.
-- [ ] memoryStore loads `GET /projects`, `GET /preferences`, `GET /memory/entries?kind=` ; localStorage mock seed removed; settings GET/PATCH.
+- [x] NotificationCenter loads `GET /notifications`, subscribes `notification.created`, map severity→toast, mark-read `PATCH`; unread badge from store.
+- [x] memoryStore loads `GET /projects`, `GET /preferences`, `GET /memory/entries?kind=` ; localStorage mock seed removed; settings GET/PATCH.
 - [ ] Commit `feat: wire notifications, memory, settings to backend`.
 
 ---
 
 ### Task 14: Full-stack E2E verification + final docs
 
-- Boot backend (`cd backend && uv run uvicorn app.main:app --port 8000`), boot frontend (`npm run dev`). Probe: health envelope, `/system/metrics`, POST `/chat` + WS stream, notification broadcast, conversation CRUD, preferences. Verify WS heartbeat/reconnect, the metrics push cadence.
-- Run full backend and frontend suites; `docs` update (integration guide with run + curl + WS examples).
-- Final commit `chore: end-to-end verification + integration docs`.
+- [x] Boot backend (`cd backend && uv run uvicorn app.main:app --port 8000`), boot frontend (`npm run dev`). Probe: health envelope, `/system/metrics`, POST `/chat` + WS stream, notification broadcast, conversation CRUD, preferences. Verify WS heartbeat/reconnect, the metrics push cadence.
+- [x] Run full backend and frontend suites; `docs` update (integration guide with run + curl + WS examples).
+- [ ] Final commit `chore: end-to-end verification + integration docs`.

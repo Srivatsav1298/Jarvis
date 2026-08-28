@@ -1,12 +1,24 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, PanelHeader, Icon, Badge } from '@/components/ui'
-import { ARTICLES } from '@/services/intelligence'
+import { fetchArticles } from '@/services/intelligence'
 import { motion } from 'framer-motion'
 import { HiOutlineArrowRight } from 'react-icons/hi2'
+import type { Article } from '@/types'
 
 export function RecentIntelligence() {
   const navigate = useNavigate()
-  const recent = [...ARTICLES].sort((a, b) => b.relevance - a.relevance).slice(0, 4)
+  const [articles, setArticles] = useState<Article[]>([])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchArticles('All', controller.signal)
+      .then(setArticles)
+      .catch(() => setArticles([]))
+    return () => controller.abort()
+  }, [])
+
+  const recent = [...articles].sort((a, b) => b.relevance - a.relevance).slice(0, 4)
 
   return (
     <Card className="p-4">

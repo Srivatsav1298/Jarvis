@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import type { ChatMessage, Conversation, Suggestion } from '@/types'
 import { uid } from '@/utils/random'
-import { chatService } from '@/services/chat'
+import { streamChat } from '@/services/chat'
+import { api } from '@/services/api'
+import { speak } from '@/services/voice'
+import { useUIStore } from '@/stores/uiStore'
+import { useVoiceStore } from '@/stores/voiceStore'
 
 export const QUICK_PROMPTS: Suggestion[] = [
   { id: 'qp1', label: 'Summarize my day', prompt: 'Summarize my day and surface what I should focus on next.' },
@@ -10,74 +14,33 @@ export const QUICK_PROMPTS: Suggestion[] = [
   { id: 'qp4', label: 'Optimize my calendar', prompt: 'Review my calendar and optimize my focus blocks for this week.' },
 ]
 
-function seedConversations(): Conversation[] {
-  const now = Date.now()
-  const id = (s: string) => `${s}-${uid('c')}`
-  return [
-    {
-      id: id('morning'),
-      title: 'Morning Briefing',
-      pinned: true,
-      updatedAt: now - 1000 * 60 * 24,
-      messages: [
-        {
-          id: uid('m'),
-          role: 'user',
-          content: 'Brief me for the day.',
-          at: now - 1000 * 60 * 26,
-        },
-        {
-          id: uid('m'),
-          role: 'assistant',
-          content:
-            "Good morning, Sir. I've been monitoring your workspace since 06:02.\n\n- **18 new job opportunities** matched your profile overnight\n- **3 important emails** need attention\n- Your interview tomorrow is **confirmed** at 10:30\n- Weather looks favorable for the evening run\n\nYour calendar is optimized. I recommend starting with the **Portfolio Website** focus block at 09:00.",
-          at: now - 1000 * 60 * 24,
-        },
-      ],
-    },
-    {
-      id: id('resume'),
-      title: 'Resume Tailoring',
-      pinned: true,
-      updatedAt: now - 1000 * 60 * 60 * 5,
-      messages: [
-        {
-          id: uid('m'),
-          role: 'user',
-          content: 'Tailor my resume for the NVIDIA CUDA role.',
-          at: now - 1000 * 60 * 60 * 6,
-        },
-        {
-          id: uid('m'),
-          role: 'assistant',
-          content:
-            "I've rewritten your resume's top section to emphasize **CUDA kernels**, **performance engineering**, and **LLM inference optimization** — matching 9 of 11 required skills for that role. Match probability rose from 68% to **91%**. Review the diff in Workspace → Files.",
-          at: now - 1000 * 60 * 60 * 5,
-        },
-      ],
-    },
-    {
-      id: id('code'),
-      title: 'Vector Search Design',
-      pinned: false,
-      updatedAt: now - 1000 * 60 * 60 * 26,
-      messages: [
-        {
-          id: uid('m'),
-          role: 'user',
-          content: 'Show me a HNSW index insertion in TypeScript.',
-          at: now - 1000 * 60 * 60 * 27,
-        },
-        {
-          id: uid('m'),
-          role: 'assistant',
-          content:
-            'Here is a minimal HNSW insertion sketch:\n\n```ts\nfunction insert(points: number[][], entry: number[]): void {\n  // layered neighbor graph insertion\n  const layer = 0\n  const candidates = [entry]\n  points.push(entry)\n  return void layer\n}\n```\n\nWant me to extend it with efSearch and multi-layer navigation?',
-          at: now - 1000 * 60 * 60 * 26,
-        },
-      ],
-    },
-  ]
+interface ApiConversation {
+  id: string
+  title: string
+  pinned: boolean
+  last_activity: string | null
+  message_count: number
+  messages?: Array<{
+    id: string
+    role: string
+    content: string
+    created_at: string
+  }>
+}
+
+function toConversation(c: ApiConversation): Conversation {
+  return {
+    id: c.id,
+    title: c.title,
+    pinned: c.pinned,
+    updatedAt: c.last_activity ? new Date(c.last_activity).getTime() : Date.now(),
+    messages: (c.messages ?? []).map((m) => ({
+      id: m.id,
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+      at: new Date(m.created_at).getTime(),
+    })),
+  }
 }
 
 interface ChatState {
@@ -86,13 +49,22 @@ interface ChatState {
   query: string
   streaming: boolean
   controller: AbortController | null
+  loaded: boolean
+  loadConversations: () => Promise<void>
   setActive: (id: string) => void
-  newConversation: () => void
-  deleteConversation: (id: string) => void
-  togglePin: (id: string) => void
+  newConversation: () => Promise<void>
+  deleteConversation: (id: string) => Promise<void>
+  togglePin: (id: string) => Promise<void>
   setQuery: (q: string) => void
-  sendMessage: (text: string) => Promise<void>
+  sendMessage: (text: string, options?: { speak?: boolean }) => Promise<string>
   stopStreaming: () => void
+}
+
+// Voice turns provide their own speech callbacks for barge-in/continuous mode.
+// This one-shot handoff preserves the public sendMessage(text) call shape.
+let suppressNextAutoSpeech = false
+export function suppressNextChatAutoSpeech(): void {
+  suppressNextAutoSpeech = true
 }
 
 export const useChatStore = create<ChatState>()((set, get) => {
@@ -129,61 +101,105 @@ export const useChatStore = create<ChatState>()((set, get) => {
   }
 
   return {
-    conversations: seedConversations(),
+    conversations: [],
     activeId: '',
     query: '',
     streaming: false,
     controller: null,
+    loaded: false,
+
+    loadConversations: async () => {
+      try {
+        const data = await api.get<{ items: ApiConversation[] }>('/conversations')
+        const convs = (data.items ?? []).map(toConversation)
+        set({
+          conversations: convs,
+          activeId: get().activeId || convs[0]?.id || '',
+          loaded: true,
+        })
+      } catch {
+        set({ loaded: true })
+      }
+    },
 
     setActive: (id) => set({ activeId: id }),
 
-    newConversation: () => {
-      const conv: Conversation = {
+    newConversation: async () => {
+      const local: Conversation = {
         id: uid('c'),
         title: 'New Conversation',
         pinned: false,
         updatedAt: Date.now(),
         messages: [],
       }
-      set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }))
+      set((s) => ({ conversations: [local, ...s.conversations], activeId: local.id }))
+      try {
+        const created = await api.post<ApiConversation>('/conversations', {
+          title: 'New Conversation',
+        })
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === local.id ? { ...c, id: created.id } : c,
+          ),
+          activeId: s.activeId === local.id ? created.id : s.activeId,
+        }))
+      } catch {
+        // keep the optimistic local row if the API is unreachable
+      }
     },
 
-    deleteConversation: (id) =>
-      set((s) => {
-        const remaining = s.conversations.filter((c) => c.id !== id)
-        return {
-          conversations: remaining,
-          activeId: s.activeId === id ? remaining[0]?.id ?? '' : s.activeId,
-        }
-      }),
+    deleteConversation: async (id) => {
+      const remaining = get().conversations.filter((c) => c.id !== id)
+      set({
+        conversations: remaining,
+        activeId: get().activeId === id ? remaining[0]?.id ?? '' : get().activeId,
+      })
+      try {
+        await api.del(`/conversations/${id}`)
+      } catch {
+        // local removal already applied
+      }
+    },
 
-    togglePin: (id) =>
+    togglePin: async (id) => {
+      const target = get().conversations.find((c) => c.id === id)
+      if (!target) return
       set((s) => ({
         conversations: s.conversations.map((c) =>
           c.id === id ? { ...c, pinned: !c.pinned } : c,
         ),
-      })),
+      }))
+      try {
+        await api.patch(`/conversations/${id}`, { pinned: !target.pinned })
+      } catch {
+        // revert on failure
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, pinned: target.pinned } : c,
+          ),
+        }))
+      }
+    },
 
     setQuery: (q) => set({ query: q }),
 
-    sendMessage: async (text) => {
+    sendMessage: async (text, options = {}) => {
       const trimmed = text.trim()
-      if (!trimmed) return
+      if (!trimmed) return ''
       const { activeId, conversations } = get()
 
       const conv =
-        conversations.find((c) => c.id === activeId) ??
-        (() => {
-          const fresh: Conversation = {
-            id: uid('c'),
-            title: trimmed.slice(0, 42),
-            pinned: false,
-            updatedAt: Date.now(),
-            messages: [],
-          }
-          set((s) => ({ conversations: [fresh, ...s.conversations], activeId: fresh.id }))
-          return fresh
-        })()
+        conversations.find((c) => c.id === activeId) ?? {
+          id: uid('c'),
+          title: trimmed.slice(0, 42),
+          pinned: false,
+          updatedAt: Date.now(),
+          messages: [],
+        }
+
+      if (!conversations.some((c) => c.id === conv.id)) {
+        set((s) => ({ conversations: [conv, ...s.conversations], activeId: conv.id }))
+      }
 
       const userMsg: ChatMessage = {
         id: uid('m'),
@@ -207,24 +223,46 @@ export const useChatStore = create<ChatState>()((set, get) => {
 
       let acc = ''
       try {
-        for await (const chunk of chatService.stream(trimmed, controller.signal)) {
+        for await (const chunk of streamChat({
+          conversationId: conv.id,
+          prompt: trimmed,
+          signal: controller.signal,
+        })) {
           acc += chunk
           updateAssistant(conv.id, assistantId, acc, true)
         }
         updateAssistant(conv.id, assistantId, acc, false)
       } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          updateAssistant(
-            conv.id,
-            assistantId,
-            acc || 'I encountered an issue while processing that request, Sir.',
-            false,
-          )
+        if ((err as Error).name !== 'AbortError' && !controller.signal.aborted) {
+          const fallback = 'I encountered an issue while processing that request, Sir.'
+          acc = acc || fallback
+          updateAssistant(conv.id, assistantId, acc, false)
         }
       } finally {
         controller = null
         set({ streaming: false, controller: null })
       }
+      const shouldAutoSpeak = !suppressNextAutoSpeech
+      suppressNextAutoSpeech = false
+      if (acc && options.speak !== false && shouldAutoSpeak) {
+        const voice = useVoiceStore.getState()
+        if (voice.enabled && voice.autoSpeak) {
+          speak(acc, {
+            rate: voice.rate,
+            pitch: voice.pitch,
+            volume: voice.volume,
+            voiceName: voice.voiceName,
+            onerror: (message) => {
+              useUIStore.getState().pushToast({
+                title: 'Voice unavailable',
+                message,
+                tone: 'error',
+              })
+            },
+          })
+        }
+      }
+      return acc
     },
 
     stopStreaming: () => {

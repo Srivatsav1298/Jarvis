@@ -55,14 +55,7 @@ function CodeBlock({
 }
 
 const components: Components = {
-  code: ({ node, className, children, inline }) => {
-    void node
-    return (
-      <CodeBlock inline={inline} className={className}>
-        {children}
-      </CodeBlock>
-    )
-  },
+  code: CodeBlock,
   pre: ({ children }) => <>{children}</>,
   p: ({ children }) => <p className="my-2.5 leading-relaxed">{children}</p>,
   a: ({ children, href }) => (

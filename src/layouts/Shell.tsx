@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { useUIStore } from '@/stores/uiStore'
 import { useMetricsStore } from '@/stores/metricsStore'
+import { useConnectionStore } from '@/stores/connectionStore'
+import { socket } from '@/services/ws'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { StatusStrip } from './StatusStrip'
@@ -12,6 +14,9 @@ import { Toaster } from '@/components/ui'
 import { useGlobalHotkeys } from '@/hooks/useHotkeys'
 import { ALL_NAV } from './nav'
 import { readStored, writeStored } from '@/hooks/useLocalStorage'
+import { stopAllVoice } from '@/services/voiceTurn'
+import { startHandsFree, stopHandsFree } from '@/services/voiceController'
+import { useVoiceStore } from '@/stores/voiceStore'
 
 const DOCK_LAYOUT_KEY = 'starc-dock-layout'
 const DOCK_LAYOUT: Record<string, number> = readStored(DOCK_LAYOUT_KEY, { main: 76, dock: 24 })
@@ -28,7 +33,54 @@ export function Shell({ children }: { children: React.ReactNode }) {
     return () => useMetricsStore.getState().stop()
   }, [])
 
+  // Browsers require a user gesture before microphone capture. Start the
+  // persistent hands-free listener on the first gesture, not on page load.
+  useEffect(() => {
+    const activate = () => {
+      if (useVoiceStore.getState().handsFree) startHandsFree()
+      window.removeEventListener('pointerdown', activate)
+      window.removeEventListener('keydown', activate)
+    }
+    window.addEventListener('pointerdown', activate, { once: true })
+    window.addEventListener('keydown', activate, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', activate)
+      window.removeEventListener('keydown', activate)
+      stopHandsFree()
+    }
+  }, [])
+
+  useEffect(() => {
+    socket.connect('/ws')
+
+    const s = useConnectionStore.getState()
+    const sync = () => {
+      s.setWsStatus(socket.status)
+      s.setLatency(socket.latencyMs)
+      s.setReconnectCount(socket.reconnectCount)
+    }
+    const tick = window.setInterval(sync, 1000)
+    sync()
+
+    return () => {
+      socket.close()
+      window.clearInterval(tick)
+    }
+  }, [])
+
   useGlobalHotkeys('mod+k', () => setPaletteOpen(true))
+
+  // Escape stops any speaking / active voice turn (spec §20).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        stopAllVoice()
+        stopHandsFree()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // "g <key>" view navigation
   useEffect(() => {
@@ -104,6 +156,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <CommandPalette />
       <Toaster />
+      <VoiceAnnouncer />
+    </div>
+  )
+}
+
+function VoiceAnnouncer() {
+  const state = useVoiceStore((s) => s.interactionState)
+  const message = useVoiceStore((s) => s.interactionMessage)
+  return (
+    <div className="sr-only" aria-live="polite" aria-atomic="true">
+      {state}: {message}
     </div>
   )
 }

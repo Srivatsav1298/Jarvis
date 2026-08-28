@@ -44,3 +44,9 @@ async def test_memory_entry_and_settings_roundtrip(session) -> None:
     assert result.scalar_one() == 1
     result = await session.execute(text("SELECT count(*) FROM settings"))
     assert result.scalar_one() == 1
+
+
+def test_conversation_metadata_columns():
+    cols = Conversation.__table__.columns
+    assert "pinned" in cols and "message_count" in cols and "last_activity" in cols
+    assert "created_by" in cols and "last_model" in cols

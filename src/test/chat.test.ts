@@ -1,41 +1,131 @@
-import { describe, expect, it } from 'vitest'
-import { chatService } from '@/services/chat'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { streamChat } from '@/services/chat'
+import { api } from '@/services/api'
 
-async function collect(gen: AsyncGenerator<string>): Promise<string> {
+const handlers = new Map<string, (payload: Record<string, unknown>) => void>()
+const unsubs = new Map<string, () => void>()
+const sentRaw: unknown[] = []
+
+vi.mock('@/services/ws', () => ({
+  socket: {
+    status: 'open',
+    subscribe: (type: string, cb: (p: Record<string, unknown>) => void) => {
+      handlers.set(type, cb)
+      const unsub = () => {
+        handlers.delete(type)
+        unsubs.delete(type)
+      }
+      unsubs.set(type, unsub)
+      return unsub
+    },
+    sendRaw: (obj: unknown) => {
+      sentRaw.push(obj)
+    },
+  },
+}))
+
+vi.mock('@/services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/api')>()
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      post: vi.fn().mockResolvedValue({
+        request_id: 'req-1',
+        conversation_id: 'conv-1',
+        model: 'mock',
+      }),
+    },
+  }
+})
+
+function emit(type: string, payload: Record<string, unknown>) {
+  handlers.get(type)?.(payload)
+}
+
+/** Start the generator (registers WS handlers) and drive it to completion. */
+async function drive(
+  gen: AsyncGenerator<string>,
+): Promise<{ it: AsyncIterator<string>; first: Promise<IteratorResult<string>> }> {
+  const it = gen[Symbol.asyncIterator]()
+  const first = it.next()
+  await new Promise((r) => setTimeout(r, 20))
+  return { it, first }
+}
+
+async function drain(
+  first: Promise<IteratorResult<string>>,
+  it: AsyncIterator<string>,
+): Promise<string> {
   let out = ''
-  for await (const token of gen) out += token
+  let r = await first
+  while (!r.done) {
+    out += r.value
+    r = await it.next()
+  }
   return out
 }
 
-describe('chatService', () => {
-  it('streams a tokenized reply for a known prompt', async () => {
-    const ctrl = new AbortController()
-    const reply = await collect(chatService.stream('thanks', ctrl.signal))
-    expect(reply.length).toBeGreaterThan(20)
-    expect(reply).toContain('Always, Sir.')
+beforeEach(() => {
+  handlers.clear()
+  unsubs.clear()
+  sentRaw.length = 0
+  vi.clearAllMocks()
+})
+
+afterEach(() => {
+  unsubs.forEach((u) => u())
+  vi.restoreAllMocks()
+})
+
+describe('streamChat', () => {
+  it('posts a chat request and streams tokens from WS chunks', async () => {
+    const { it, first } = await drive(
+      streamChat({ conversationId: 'conv-1', prompt: 'hello', requestId: 'req-1' }),
+    )
+
+    emit('chat.chunk', { request_id: 'req-1', text: 'Good' })
+    emit('chat.chunk', { request_id: 'req-1', text: ' morning' })
+    emit('chat.end', { request_id: 'req-1', conversation_id: 'conv-1' })
+
+    expect(await drain(first, it)).toBe('Good morning')
+    expect(api.post).toHaveBeenCalledWith('/chat', {
+      message: 'hello',
+      conversation_id: 'conv-1',
+      request_id: 'req-1',
+    })
   })
 
-  it('produces markdown and code blocks for code prompts', async () => {
-    const ctrl = new AbortController()
-    const reply = await collect(chatService.stream('write a react component', ctrl.signal))
-    expect(reply).toContain('```')
-    expect(reply.toLowerCase()).toContain('implementation')
-  }, 20_000)
+  it('ignores chunks from other requests', async () => {
+    const { it, first } = await drive(
+      streamChat({ conversationId: 'conv-1', prompt: 'hi', requestId: 'req-1' }),
+    )
 
-  it('aborts before streaming throws AbortError', async () => {
-    const ctrl = new AbortController()
-    ctrl.abort()
-    const gen = chatService.stream('hello', ctrl.signal)
-    await expect(collect(gen)).rejects.toThrow('Aborted')
+    emit('chat.chunk', { request_id: 'other', text: 'wrong' })
+    emit('chat.chunk', { request_id: 'req-1', text: 'right' })
+    emit('chat.end', { request_id: 'req-1', conversation_id: 'conv-1' })
+
+    expect(await drain(first, it)).toBe('right')
   })
 
-  it('aborts mid-stream', async () => {
+  it('sends chat.cancel on abort', async () => {
     const ctrl = new AbortController()
-    const gen = chatService.stream('hello there', ctrl.signal)
-    const it = gen[Symbol.asyncIterator]()
-    const first = await it.next()
-    expect(first.done).toBe(false)
+    const { it, first } = await drive(
+      streamChat({
+        conversationId: 'conv-1',
+        prompt: 'hello',
+        requestId: 'req-1',
+        signal: ctrl.signal,
+      }),
+    )
+    emit('chat.chunk', { request_id: 'req-1', text: 'part' })
+
     ctrl.abort()
-    await expect(it.next()).rejects.toThrow('Aborted')
-  }, 10_000)
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(sentRaw).toEqual([
+      { version: 1, type: 'chat.cancel', payload: { request_id: 'req-1' } },
+    ])
+    expect(await drain(first, it)).toBe('part')
+  })
 })

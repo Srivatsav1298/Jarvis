@@ -10,6 +10,7 @@ export type SoundKind = 'click' | 'activate' | 'listen' | 'notify' | 'complete' 
 class AudioService {
   private ctx: AudioContext | null = null
   private analyser: AnalyserNode | null = null
+  private source: MediaStreamAudioSourceNode | null = null
   private stream: MediaStream | null = null
   private simOsc: OscillatorNode | null = null
   private simGain: GainNode | null = null
@@ -49,15 +50,16 @@ class AudioService {
   }
 
   async enableMic(): Promise<boolean> {
+    if (this.micEnabled && this.stream) return true
     const ctx = this.ensure()
     if (!ctx || !navigator.mediaDevices?.getUserMedia) return false
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const src = ctx.createMediaStreamSource(this.stream)
+      this.source = ctx.createMediaStreamSource(this.stream)
       this.analyser = ctx.createAnalyser()
       this.analyser.fftSize = 128
       this.data = new Uint8Array(this.analyser.frequencyBinCount)
-      src.connect(this.analyser)
+      this.source.connect(this.analyser)
       this.micEnabled = true
       this.disposeSim()
       return true
@@ -68,6 +70,9 @@ class AudioService {
 
   disableMic(): void {
     this.micEnabled = false
+    this.source?.disconnect()
+    this.source = null
+    this.analyser?.disconnect()
     this.analyser = null
     this.stream?.getTracks().forEach((t) => t.stop())
     this.stream = null

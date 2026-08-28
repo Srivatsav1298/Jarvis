@@ -8,6 +8,8 @@ import { ALL_NAV } from '@/layouts/nav'
 import { Icon, Kbd } from '@/components/ui'
 import { cn } from '@/utils/cn'
 import { audioService } from '@/services/audio'
+import { useVoiceStore } from '@/stores/voiceStore'
+import { startHandsFree, stopHandsFree } from '@/services/voiceController'
 
 interface Action {
   id: string
@@ -45,15 +47,22 @@ export function CommandPalette() {
     const quick: Action[] = [
       {
         id: 'voice',
-        label: 'Start Voice Mode',
+        label: 'Enable Hands-free Voice',
         hint: 'Listening',
         icon: 'microphone',
         group: 'Actions',
         keywords: 'voice speak talk listen mic',
         run: () => {
-          setOrbMode('listening')
-          pushToast({ title: 'Voice mode ready', message: 'Listening, Sir.', tone: 'info' })
-          window.setTimeout(() => setOrbMode('monitoring'), 4000)
+          const state = useVoiceStore.getState().interactionState
+          if (state !== 'IDLE' && state !== 'ERROR') {
+            stopHandsFree()
+            setOrbMode('monitoring')
+            pushToast({ title: 'Hands-free voice stopped', message: 'Wake listening ended.', tone: 'info' })
+            return
+          }
+          if (startHandsFree()) {
+            pushToast({ title: 'Hands-free voice ready', message: 'Say “Hey Starc” or “Starc”.', tone: 'success' })
+          }
         },
       },
       {

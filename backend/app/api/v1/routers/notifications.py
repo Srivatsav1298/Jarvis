@@ -1,9 +1,11 @@
 """Notification endpoints."""
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.envelope import ok
 from app.dependencies.database import get_db_session
 from app.exceptions import NotFoundError
+from app.providers.notifier import WebSocketNotifier
 from app.repositories.implementations import NotificationRepository
 from app.schemas.common import ListResponse
 from app.schemas.notification import NotificationCreate, NotificationRead
@@ -12,40 +14,43 @@ from app.services.notifications import NotificationService
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 
-@router.get("", response_model=ListResponse[NotificationRead])
+@router.get("")
 async def list_notifications(
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
-) -> ListResponse[NotificationRead]:
+) -> dict:
     """Return a page of notifications."""
     service = NotificationService(NotificationRepository(session))
     items, total = await service.list(limit=limit, offset=offset)
-    return ListResponse(items=items, total=total)
+    reads = [NotificationRead.model_validate(i) for i in items]
+    return ok(ListResponse(items=reads, total=total))
 
 
-@router.post("", response_model=NotificationRead, status_code=201)
+@router.post("", status_code=201)
 async def create_notification(
     payload: NotificationCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
-):
-    """Create a notification."""
+) -> dict:
+    """Create a notification and broadcast it over WebSocket."""
     service = NotificationService(NotificationRepository(session))
-    return await service.create(payload)
+    notifier = WebSocketNotifier(request.app.state.websocket_manager)
+    return ok(NotificationRead.model_validate(await service.publish(payload, notifier)))
 
 
-@router.patch("/{notification_id}/read", response_model=NotificationRead)
+@router.patch("/{notification_id}/read")
 async def mark_notification_read(
     notification_id: str,
     read: bool,
     session: AsyncSession = Depends(get_db_session),
-):
+) -> dict:
     """Mark a notification read/unread."""
     service = NotificationService(NotificationRepository(session))
     notification = await service.mark_read(notification_id, read)
     if notification is None:
         raise NotFoundError("Notification not found")
-    return notification
+    return ok(NotificationRead.model_validate(notification))
 
 
 @router.delete("/{notification_id}", status_code=204)
