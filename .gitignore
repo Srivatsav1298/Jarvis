@@ -11,3 +11,12 @@ npm-debug.log*
 
 # git worktrees
 .worktrees/
+
+# Exclude docs/guides/specs requested by user
+CLAUDE.md
+PRD.md
+TRD.md
+progress.md
+claude.md
+prd.md
+trd.md
