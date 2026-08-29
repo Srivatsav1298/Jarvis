@@ -10,6 +10,8 @@ It combines natural conversation, low-latency voice interaction, deep long-term 
 
 - **🗣️ Low-Latency Voice Interface**: Wake word detection, Voice Activity Detection (VAD), Faster Whisper STT, and Docker-powered Kokoro TTS.
 - **🧠 Multi-layered Memory**: Four-tier memory architecture (Working, Conversation, Long-term, and Knowledge Base) for deep contextual recall.
+- **📰 Intelligence News Feed**: Real-time RSS-based aggregator prioritizing global Technology feeds (TechCrunch, Ars Technica, The Verge, HN), alongside World, Sports, Finance, Trending, and Latest news.
+- **💼 Automated Job Scanner**: Daily 07:00 Oslo cron scraper targeting key roles (AI Engineer, Python/FastAPI, Data Engineer, SQL) across `finn.no` (via Jina Reader), `Jobbnorge`, and `LinkedIn` with automated AI relevance match scoring, salary insights, and visa sponsorship tags.
 - **⚡ Realtime Synchronization**: Full-duplex WebSocket-based architecture for instant event handling and UI updates.
 - **🧩 Extensible Capability Registry**: Modular service layer that allows safe execution of tasks (Reminders, Calendar, Email, automation) without giving LLMs direct access to the OS.
 - **🎨 Premium Visual Dashboard**: Rich glassmorphic UI built with React, Tailwind CSS, Framer Motion, and interactive Orb visualizations.
@@ -30,6 +32,7 @@ It combines natural conversation, low-latency voice interaction, deep long-term 
 - **Database**: SQLite (via SQLAlchemy ORM & Alembic migrations)
 - **Package Manager**: UV
 - **AI & Voice Services**: OmniRouter, Kokoro TTS (local Docker engine), Faster Whisper, Silero VAD
+- **Services & Scraping**: `feedparser` (RSS news aggregator), Jina Reader integration (for public job boards)
 
 ---
 
